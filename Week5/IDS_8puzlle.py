@@ -125,7 +125,8 @@ class IDS8PuzzleApp(ctk.CTk):
         self.steps = []
         self.solution = []
         self.current_step = 0
-        self.solution_step = 0
+        self.auto_running = False
+        self.auto_delay = 500
         self.cells = []
 
         self.build_ui()
@@ -210,16 +211,17 @@ class IDS8PuzzleApp(ctk.CTk):
             command=self.next_ids_step
         ).grid(row=1, column=0, padx=7, pady=7)
 
-        ctk.CTkButton(
+        self.auto_button = ctk.CTkButton(
             button_frame,
-            text="Chạy solution",
+            text="Chạy tự động",
             width=135,
             height=42,
             fg_color="#f59e0b",
             hover_color="#d97706",
             font=("Arial", 14, "bold"),
-            command=self.next_solution_step
-        ).grid(row=1, column=1, padx=7, pady=7)
+            command=self.auto_run
+        )
+        self.auto_button.grid(row=1, column=1, padx=7, pady=7)
 
         ctk.CTkButton(
             button_frame,
@@ -231,13 +233,6 @@ class IDS8PuzzleApp(ctk.CTk):
             font=("Arial", 14, "bold"),
             command=self.reset_view
         ).grid(row=2, column=0, columnspan=2, padx=7, pady=7)
-
-        self.status_text = ctk.CTkLabel(
-            self.left,
-            text="",
-            font=("Arial", 1),
-            text_color="#0f172a"
-        )
 
     def build_right(self):
         ctk.CTkLabel(
@@ -434,11 +429,15 @@ class IDS8PuzzleApp(ctk.CTk):
                 step += 1
 
     def random_new(self):
+        self.auto_running = False
+        self.auto_button.configure(text="Chạy tự động")
         self.initial_state = random_initial_state()
         self.reset_all()
         self.update_board(self.initial_state)
 
     def find_ids(self):
+        self.auto_running = False
+        self.auto_button.configure(text="Chạy tự động")
         self.reset_all()
         self.generate_steps()
         self.show_solution_summary()
@@ -448,6 +447,8 @@ class IDS8PuzzleApp(ctk.CTk):
             return
 
         if self.current_step >= len(self.steps):
+            self.auto_running = False
+            self.auto_button.configure(text="Chạy tự động")
             return
 
         data = self.steps[self.current_step]
@@ -461,30 +462,50 @@ class IDS8PuzzleApp(ctk.CTk):
         if data.get("solution") is not None:
             self.show_solution_summary()
 
-    def next_solution_step(self):
-        if not self.solution:
+    def auto_run(self):
+        if not self.steps:
+            self.find_ids()
+
+        if not self.steps:
             return
 
-        if self.solution_step >= len(self.solution):
+        self.auto_running = not self.auto_running
+
+        if self.auto_running:
+            self.auto_button.configure(text="Dừng")
+            self.run_auto_step()
+        else:
+            self.auto_button.configure(text="Chạy tự động")
+
+    def run_auto_step(self):
+        if not self.auto_running:
             return
 
-        node = self.solution[self.solution_step]
-        self.update_board(node.state)
-        self.solution_step += 1
+        if self.current_step >= len(self.steps):
+            self.auto_running = False
+            self.auto_button.configure(text="Chạy tự động")
+            return
+
+        self.next_ids_step()
+        self.after(self.auto_delay, self.run_auto_step)
 
     def reset_view(self):
+        self.auto_running = False
+        self.auto_button.configure(text="Chạy tự động")
         self.current_step = 0
-        self.solution_step = 0
         self.update_board(self.initial_state)
         self.clear_boxes()
 
     def reset_all(self):
+        self.auto_running = False
         self.steps = []
         self.solution = []
         self.current_step = 0
-        self.solution_step = 0
         self.update_board(self.initial_state)
         self.clear_boxes()
+
+        if hasattr(self, "auto_button"):
+            self.auto_button.configure(text="Chạy tự động")
 
     def clear_boxes(self):
         self.step_label.configure(text="Step: -")
