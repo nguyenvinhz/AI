@@ -342,6 +342,18 @@ class StepBasedSolver:
                     cost += 1
         return cost
 
+    def manhattan_distance(self, state):
+        distance = 0
+        for i in range(3):
+            for j in range(3):
+                if state[i][j] != '.':
+                    tile = state[i][j]
+                    for di in range(3):
+                        for dj in range(3):
+                            if GOAL_STATE[di][dj] == tile:
+                                distance += abs(i - di) + abs(j - dj)
+        return distance
+
     def generate_steps_ucs(self, start):
         self.steps = []
         step = 1
@@ -421,6 +433,171 @@ class StepBasedSolver:
             })
             step += 1
 
+    def generate_steps_greedy(self, start):
+        self.steps = []
+        step = 1
+        heap = []
+        visited = set()
+        counter = 0
+        
+        start_heuristic = self.manhattan_distance(start)
+        start_node = Node(start, depth=0)
+        heapq.heappush(heap, (start_heuristic, counter, state_to_string(start), start_node))
+        visited.add(state_to_string(start))
+        
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start,
+            "frontier": [start_node],
+            "action": "START",
+            "message": "Bắt đầu Greedy",
+            "heuristic": start_heuristic,
+            "depth": "-"
+        })
+        step += 1
+        
+        while heap:
+            _, _, _, node = heapq.heappop(heap)
+            
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": node.state,
+                "frontier": [n for _, _, _, n in heap],
+                "action": "POP",
+                "message": "Lấy node với h(n) thấp nhất",
+                "heuristic": self.manhattan_distance(node.state),
+                "depth": node.depth
+            })
+            step += 1
+            
+            if is_goal(node.state):
+                self.solution = get_solution(node)
+                self.steps.append({
+                    "step": step,
+                    "node": node,
+                    "state": node.state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tìm thấy goal!",
+                    "heuristic": self.manhattan_distance(node.state),
+                    "depth": node.depth,
+                    "solution": self.solution
+                })
+                return
+            
+            children = []
+            for action in get_actions(node.state):
+                child_state = execute_action(node.state, action)
+                child_key = state_to_string(child_state)
+                
+                if child_key not in visited:
+                    visited.add(child_key)
+                    child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
+                    children.append(child)
+                    child_heuristic = self.manhattan_distance(child_state)
+                    counter += 1
+                    heapq.heappush(heap, (child_heuristic, counter, child_key, child))
+            
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": node.state,
+                "frontier": [n for _, _, _, n in heap],
+                "action": "EXPAND",
+                "message": f"Sinh {len(children)} node con",
+                "heuristic": self.manhattan_distance(node.state),
+                "depth": node.depth
+            })
+            step += 1
+
+    def generate_steps_astar(self, start):
+        self.steps = []
+        step = 1
+        heap = []
+        visited = set()
+        counter = 0
+        
+        start_heuristic = self.manhattan_distance(start)
+        start_node = Node(start, depth=0)
+        start_f = 0 + start_heuristic
+        heapq.heappush(heap, (start_f, counter, state_to_string(start), start_node))
+        visited.add(state_to_string(start))
+        
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start,
+            "frontier": [start_node],
+            "action": "START",
+            "message": "Bắt đầu A*",
+            "f_n": start_f,
+            "depth": "-"
+        })
+        step += 1
+        
+        while heap:
+            _, _, _, node = heapq.heappop(heap)
+            
+            g_n = node.depth
+            h_n = self.manhattan_distance(node.state)
+            f_n = g_n + h_n
+            
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": node.state,
+                "frontier": [n for _, _, _, n in heap],
+                "action": "POP",
+                "message": f"Lấy node với f(n)={f_n} thấp nhất",
+                "f_n": f_n,
+                "depth": node.depth
+            })
+            step += 1
+            
+            if is_goal(node.state):
+                self.solution = get_solution(node)
+                self.steps.append({
+                    "step": step,
+                    "node": node,
+                    "state": node.state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tìm thấy goal!",
+                    "f_n": f_n,
+                    "depth": node.depth,
+                    "solution": self.solution
+                })
+                return
+            
+            children = []
+            for action in get_actions(node.state):
+                child_state = execute_action(node.state, action)
+                child_key = state_to_string(child_state)
+                
+                if child_key not in visited:
+                    visited.add(child_key)
+                    child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
+                    children.append(child)
+                    child_g = child.depth
+                    child_h = self.manhattan_distance(child_state)
+                    child_f = child_g + child_h
+                    counter += 1
+                    heapq.heappush(heap, (child_f, counter, child_key, child))
+            
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": node.state,
+                "frontier": [n for _, _, _, n in heap],
+                "action": "EXPAND",
+                "message": f"Sinh {len(children)} node con",
+                "f_n": f_n,
+                "depth": node.depth
+            })
+            step += 1
+
 class PuzzleApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -478,7 +655,7 @@ class PuzzleApp(ctk.CTk):
 
         ctk.CTkLabel(algo_frame, text="Thuật toán:", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 10))
 
-        self.algo_menu = ctk.CTkComboBox(algo_frame, values=["BFS", "DFS", "IDS", "UCS"],
+        self.algo_menu = ctk.CTkComboBox(algo_frame, values=["BFS", "DFS", "IDS", "UCS", "Greedy", "A*"],
             command=self.change_algorithm, width=150, height=32)
         self.algo_menu.set("BFS")
         self.algo_menu.pack(side="left")
@@ -570,8 +747,12 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_dfs(self.initial_state)
         elif self.algorithm == "IDS":
             self.solver.generate_steps_ids(self.initial_state)
-        else:
+        elif self.algorithm == "UCS":
             self.solver.generate_steps_ucs(self.initial_state)
+        elif self.algorithm == "Greedy":
+            self.solver.generate_steps_greedy(self.initial_state)
+        else:
+            self.solver.generate_steps_astar(self.initial_state)
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")
