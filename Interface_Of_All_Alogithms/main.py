@@ -354,6 +354,20 @@ class StepBasedSolver:
                                 distance += abs(i - di) + abs(j - dj)
         return distance
 
+    def count_inversions(self, state):
+        tiles = []
+        for i in range(3):
+            for j in range(3):
+                if state[i][j] != '.':
+                    tiles.append(state[i][j])
+        
+        inversions = 0
+        for i in range(len(tiles)):
+            for j in range(i + 1, len(tiles)):
+                if tiles[i] > tiles[j]:
+                    inversions += 1
+        return inversions
+
     def generate_steps_ucs(self, start):
         self.steps = []
         step = 1
@@ -519,9 +533,10 @@ class StepBasedSolver:
         visited = set()
         counter = 0
         
-        start_heuristic = self.manhattan_distance(start)
+        start_h = self.count_inversions(start)
+        start_g = 0
+        start_f = start_g + start_h
         start_node = Node(start, depth=0)
-        start_f = 0 + start_heuristic
         heapq.heappush(heap, (start_f, counter, state_to_string(start), start_node))
         visited.add(state_to_string(start))
         
@@ -541,7 +556,7 @@ class StepBasedSolver:
             _, _, _, node = heapq.heappop(heap)
             
             g_n = node.depth
-            h_n = self.manhattan_distance(node.state)
+            h_n = self.count_inversions(node.state)
             f_n = g_n + h_n
             
             self.steps.append({
@@ -581,7 +596,7 @@ class StepBasedSolver:
                     child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
                     children.append(child)
                     child_g = child.depth
-                    child_h = self.manhattan_distance(child_state)
+                    child_h = self.count_inversions(child_state)
                     child_f = child_g + child_h
                     counter += 1
                     heapq.heappush(heap, (child_f, counter, child_key, child))

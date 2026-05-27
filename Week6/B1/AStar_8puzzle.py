@@ -77,6 +77,21 @@ def manhattan_distance(state):
     return distance
 
 
+def count_inversions(state):
+    tiles = []
+    for i in range(3):
+        for j in range(3):
+            if state[i][j] != '.':
+                tiles.append(state[i][j])
+    
+    inversions = 0
+    for i in range(len(tiles)):
+        for j in range(i + 1, len(tiles)):
+            if tiles[i] > tiles[j]:
+                inversions += 1
+    return inversions
+
+
 def create_node(state, parent, action, step):
     return {
         "state": state,
@@ -102,9 +117,10 @@ def solve_astar(start):
     visited = set()
     counter = 0
 
-    start_heuristic = manhattan_distance(start)
+    start_h = count_inversions(start)
+    start_g = 0
+    start_f = start_g + start_h
     start_node = create_node(start, None, None, 0)
-    start_f = 0 + start_heuristic
     
     heapq.heappush(heap, (start_f, counter, state_to_string(start), start_node))
     visited.add(state_to_string(start))
@@ -145,7 +161,7 @@ def solve_astar(start):
             if state_str not in visited:
                 visited.add(state_str)
                 g_n = current_node["step"] + 1
-                h_n = manhattan_distance(new_state)
+                h_n = count_inversions(new_state)
                 f_n = g_n + h_n
                 counter += 1
                 new_node = create_node(
