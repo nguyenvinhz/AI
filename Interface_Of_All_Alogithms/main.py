@@ -343,16 +343,11 @@ class StepBasedSolver:
         return cost
 
     def manhattan_distance(self, state):
-        distance = 0
         for i in range(3):
             for j in range(3):
-                if state[i][j] != '.':
-                    tile = state[i][j]
-                    for di in range(3):
-                        for dj in range(3):
-                            if GOAL_STATE[di][dj] == tile:
-                                distance += abs(i - di) + abs(j - dj)
-        return distance
+                if state[i][j] == '.':
+                    return abs(i - 2) + abs(j - 2)
+        return 0
 
     def count_inversions(self, state):
         tiles = []
@@ -613,6 +608,193 @@ class StepBasedSolver:
             })
             step += 1
 
+    def heuristic_ida_star(self, state):
+        for i in range(3):
+            for j in range(3):
+                if state[i][j] == '.':
+                    return abs(i - 2) + abs(j - 2)
+        return 0
+
+    def search_with_limit_ida(self, node, g_limit, visited):
+        stack = [node]
+        min_limit = float('inf')
+        local_visited = set()
+        local_visited.add(state_to_string(node.state))
+        
+        while stack:
+            current = stack.pop()
+            h_val = self.heuristic_ida_star(current.state)
+            f_val = current.depth + h_val
+            
+            if f_val > g_limit:
+                if f_val < min_limit:
+                    min_limit = f_val
+                continue
+            
+            if is_goal(current.state):
+                return current, g_limit
+            
+            for action in get_actions(current.state):
+                child_state = execute_action(current.state, action)
+                child_key = state_to_string(child_state)
+                
+                if child_key not in local_visited:
+                    local_visited.add(child_key)
+                    child = Node(child_state, parent=current, action=action, depth=current.depth + 1)
+                    stack.append(child)
+        
+        return None, min_limit
+
+    def generate_steps_ida_star(self, start):
+        self.steps = []
+        step = 1
+        
+        for limit in range(50):
+            start_node = Node(start, depth=0)
+            visited = set()
+            visited.add(state_to_string(start))
+            
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": start,
+                "frontier": [start_node],
+                "action": "START",
+                "message": f"IDA* - Threshold = {limit}",
+                "threshold": limit,
+                "depth": "-"
+            })
+            step += 1
+            
+            result_node, new_threshold = self.search_with_limit_ida(start_node, limit, visited)
+            
+            if result_node is not None:
+                self.solution = get_solution(result_node)
+                self.steps.append({
+                    "step": step,
+                    "node": result_node,
+                    "state": result_node.state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tìm thấy goal!",
+                    "threshold": limit,
+                    "depth": result_node.depth,
+                    "solution": self.solution
+                })
+                return
+            
+            if new_threshold == float('inf'):
+                return
+            
+            step += 1
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": start,
+                "frontier": [],
+                "action": "NEXT_THRESHOLD",
+                "message": f"Tăng threshold từ {limit} lên {new_threshold}",
+                "threshold": limit,
+                "depth": "-"
+            })
+            step += 1
+
+    def generate_steps_hill_climbing(self, start):
+        self.steps = []
+        step = 1
+        current = start
+        current_value = self.manhattan_distance(current)
+        current_node = Node(current, depth=0)
+        iterations = 0
+        
+        self.steps.append({
+            "step": step,
+            "node": current_node,
+            "state": current,
+            "frontier": [current_node],
+            "action": "START",
+            "message": f"Bắt đầu Hill Climbing (h={current_value})",
+            "heuristic": current_value,
+            "depth": "-"
+        })
+        step += 1
+        
+        while iterations < 1000:
+            iterations += 1
+            
+            if is_goal(current):
+                self.solution = get_solution(current_node)
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tìm thấy goal!",
+                    "heuristic": current_value,
+                    "depth": current_node.depth,
+                    "solution": self.solution
+                })
+                return
+            
+            rules = get_actions(current)
+            best_neighbor = None
+            best_value = current_value
+            best_action = None
+            neighbors = []
+            
+            for action in rules:
+                neighbor = execute_action(current, action)
+                value = self.manhattan_distance(neighbor)
+                neighbor_node = Node(neighbor, parent=current_node, action=action, depth=current_node.depth + 1)
+                neighbors.append((neighbor_node, value))
+                
+                if value < best_value:
+                    best_value = value
+                    best_neighbor = neighbor
+                    best_action = action
+            
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": neighbors,
+                "action": "EXPAND",
+                "message": f"Sinh {len(neighbors)} neighbor",
+                "heuristic": current_value,
+                "depth": current_node.depth
+            })
+            step += 1
+            
+            if best_neighbor is None:
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "LOCAL_MAX",
+                    "message": "Stuck tại local maximum!",
+                    "heuristic": current_value,
+                    "depth": current_node.depth
+                })
+                return
+            
+            current = best_neighbor
+            current_value = best_value
+            current_node = Node(current, parent=current_node, action=best_action, depth=current_node.depth + 1)
+            
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": [current_node],
+                "action": "MOVE",
+                "message": f"Di chuyển: {best_action} (h={best_value})",
+                "heuristic": best_value,
+                "depth": current_node.depth
+            })
+            step += 1
+
 class PuzzleApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -670,7 +852,7 @@ class PuzzleApp(ctk.CTk):
 
         ctk.CTkLabel(algo_frame, text="Thuật toán:", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 10))
 
-        self.algo_menu = ctk.CTkComboBox(algo_frame, values=["BFS", "DFS", "IDS", "UCS", "Greedy", "A*"],
+        self.algo_menu = ctk.CTkComboBox(algo_frame, values=["BFS", "DFS", "IDS", "UCS", "Greedy", "A*", "IDA*", "Hill Climbing"],
             command=self.change_algorithm, width=150, height=32)
         self.algo_menu.set("BFS")
         self.algo_menu.pack(side="left")
@@ -766,8 +948,12 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_ucs(self.initial_state)
         elif self.algorithm == "Greedy":
             self.solver.generate_steps_greedy(self.initial_state)
-        else:
+        elif self.algorithm == "A*":
             self.solver.generate_steps_astar(self.initial_state)
+        elif self.algorithm == "IDA*":
+            self.solver.generate_steps_ida_star(self.initial_state)
+        elif self.algorithm == "Hill Climbing":
+            self.solver.generate_steps_hill_climbing(self.initial_state)
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")
@@ -797,9 +983,15 @@ class PuzzleApp(ctk.CTk):
 
     def update_frontier(self, data):
         frontier_text = ""
-        for i, node in enumerate(data.get("frontier", [])):
-            state_str = str(node.state).replace(", ", ",")
-            frontier_text += f"{i+1}. {state_str} (d={node.depth})\n"
+        for i, item in enumerate(data.get("frontier", [])):
+            if isinstance(item, Node):
+                node = item
+                state_str = str(node.state).replace(", ", ",")
+                frontier_text += f"{i+1}. {state_str} (d={node.depth})\n"
+            elif isinstance(item, tuple):
+                node, value = item
+                state_str = str(node.state).replace(", ", ",")
+                frontier_text += f"{i+1}. {state_str} (h={value})\n"
         
         self.frontier_box.configure(state="normal")
         self.frontier_box.delete("1.0", "end")
