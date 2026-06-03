@@ -59,7 +59,6 @@ def execute_action(s, action):
 
 
 def manhattan_distance(s):
-    """Tính Manhattan distance - heuristic h(n)"""
     distance = 0
     for i in range(3):
         for j in range(3):
@@ -72,11 +71,6 @@ def manhattan_distance(s):
 
 
 def stochastic_hill_climbing(initial_state, max_iterations=1000):
-    """
-    Thuật toán Stochastic Hill Climbing (Leo đồi Ngẫu nhiên)
-    - Lựa chọn ngẫu nhiên từ các hàng xóm có h(n) <= h(current)
-    - Sử dụng >= để so sánh các giá trị heuristic
-    """
     current = initial_state
     current_h = manhattan_distance(current)
     iterations = 0
@@ -96,24 +90,20 @@ def stochastic_hill_climbing(initial_state, max_iterations=1000):
             print("Không có hành động nào có thể thực hiện")
             break
 
-        # Tìm tất cả hàng xóm tốt hơn hoặc bằng (sử dụng <=)
         better_neighbors = []
         for action in actions:
             next_state = execute_action(current, action)
             next_h = manhattan_distance(next_state)
             
-            # Sử dụng <= để so sánh, thêm vào danh sách nếu tốt hơn hoặc bằng
             if next_h <= current_h:
                 better_neighbors.append((next_state, next_h, action))
 
-        # Nếu không có hàng xóm tốt hơn hoặc bằng, dừng
         if not better_neighbors:
             print(f"Đạt cực bộ tại lần lặp {iterations}")
             print(f"h(n) = {current_h}")
             print_table(current)
             break
 
-        # Chọn ngẫu nhiên từ các hàng xóm tốt
         next_state, next_h, action = random.choice(better_neighbors)
         current = next_state
         current_h = next_h
@@ -124,7 +114,6 @@ def stochastic_hill_climbing(initial_state, max_iterations=1000):
         print(f"Lần lặp {iterations}: Hành động = {action}, h(n) = {current_h} (ngẫu nhiên)")
         print_table(current)
 
-        # Kiểm tra nếu đạt được trạng thái mục tiêu
         if current == goal:
             print("✓ Tìm thấy giải pháp!")
             break

@@ -59,7 +59,6 @@ def execute_action(s, action):
 
 
 def manhattan_distance(s):
-    """Tính Manhattan distance - heuristic h(n)"""
     distance = 0
     for i in range(3):
         for j in range(3):
@@ -72,18 +71,10 @@ def manhattan_distance(s):
 
 
 def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000):
-    """
-    Thuật toán Local Beam Search lai với Leo đồi
-    Kết hợp:
-    - Local Beam Search: duy trì k trạng thái tốt nhất
-    - Hill Climbing: mỗi trạng thái trong beam cải thiện bằng dốc nhất
-    - Sử dụng >= để so sánh các giá trị heuristic
-    """
     print("=" * 50)
     print(f"LOCAL BEAM SEARCH + HILL CLIMBING (k={k})")
     print("=" * 50)
 
-    # Khởi tạo beam với trạng thái ban đầu cải thiện bằng HC
     improved_initial = hill_climbing_improvement(initial_state, max_iter=100)
     beam = [improved_initial]
     current_h = manhattan_distance(improved_initial)
@@ -95,7 +86,6 @@ def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000
     print_table(improved_initial)
 
     while iteration < max_iterations:
-        # Kiểm tra nếu trạng thái mục tiêu trong beam
         for state in beam:
             if state == goal:
                 print("✓ Tìm thấy giải pháp!")
@@ -110,26 +100,21 @@ def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000
                 print("=" * 50)
                 return result
 
-        # Sinh tất cả hàng xóm từ mỗi trạng thái trong beam
         successors = []
         for state in beam:
             actions = find_action(state)
             for action in actions:
                 next_state = execute_action(state, action)
-                # Cải thiện hàng xóm bằng Hill Climbing (ngắn)
                 improved_state = hill_climbing_improvement(next_state, max_iter=50)
                 next_h = manhattan_distance(improved_state)
                 successors.append((next_h, improved_state))
 
-        # Nếu không có successor, dừng
         if not successors:
             print(f"Đạt cực bộ tại lần lặp {iteration}")
             break
 
-        # Sắp xếp successor theo h(n) và chọn k tốt nhất
         successors.sort(key=lambda x: x[0])
         
-        # Loại bỏ trùng lặp từ beam trước đó
         unique_successors = []
         seen_states = set(state_to_string(s) for s in beam)
         
@@ -139,7 +124,6 @@ def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000
                 unique_successors.append((h_val, successor))
                 seen_states.add(state_str)
 
-        # Nếu không có successor mới, dừng
         if not unique_successors:
             print(f"Không có successor mới tại lần lặp {iteration}")
             break
@@ -157,7 +141,6 @@ def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000
             print(f"  Trạng thái {i+1}: h(n) = {h}")
             print_table(state)
 
-        # Kiểm tra hội tụ
         if len(unique_successors) < k:
             print(f"Beam hội tụ - chỉ {len(unique_successors)} successor mới")
             if len(unique_successors) == 0:
@@ -181,9 +164,6 @@ def local_beam_search_with_hill_climbing(initial_state, k=3, max_iterations=1000
 
 
 def hill_climbing_improvement(state, max_iter=50):
-    """
-    Cải thiện một trạng thái bằng Hill Climbing (Dốc nhất)
-    """
     current = state
     current_h = manhattan_distance(current)
     iterations = 0
@@ -198,18 +178,15 @@ def hill_climbing_improvement(state, max_iter=50):
         best_h = current_h
         best_action = None
 
-        # Tìm hàng xóm tốt nhất
         for action in actions:
             next_state = execute_action(current, action)
             next_h = manhattan_distance(next_state)
             
-            # Sử dụng <= để so sánh
             if next_h <= best_h:
                 best_next = next_state
                 best_h = next_h
                 best_action = action
 
-        # Nếu không tìm được hàng xóm tốt hơn, dừng
         if best_h >= current_h:
             break
 
@@ -217,7 +194,6 @@ def hill_climbing_improvement(state, max_iter=50):
         current_h = best_h
         iterations += 1
 
-        # Nếu đạt trạng thái mục tiêu
         if current == goal:
             return current
 

@@ -349,6 +349,17 @@ class StepBasedSolver:
                     return abs(i - 2) + abs(j - 2)
         return 0
 
+    def tile_manhattan_distance(self, state):
+        distance = 0
+        for i in range(3):
+            for j in range(3):
+                value = state[i][j]
+                if value != '.':
+                    goal_i = (value - 1) // 3
+                    goal_j = (value - 1) % 3
+                    distance += abs(i - goal_i) + abs(j - goal_j)
+        return distance
+
     def count_inversions(self, state):
         tiles = []
         for i in range(3):
@@ -765,7 +776,7 @@ class StepBasedSolver:
                 "depth": current_node.depth
             })
             step += 1
-            
+
             if best_neighbor is None:
                 self.steps.append({
                     "step": step,
@@ -773,27 +784,460 @@ class StepBasedSolver:
                     "state": current,
                     "frontier": [],
                     "action": "LOCAL_MAX",
-                    "message": "Stuck tại local maximum!",
+                    "message": "Stuck tai local maximum!",
                     "heuristic": current_value,
                     "depth": current_node.depth
                 })
                 return
-            
+
             current = best_neighbor
             current_value = best_value
             current_node = Node(current, parent=current_node, action=best_action, depth=current_node.depth + 1)
-            
+
             self.steps.append({
                 "step": step,
                 "node": current_node,
                 "state": current,
                 "frontier": [current_node],
                 "action": "MOVE",
-                "message": f"Di chuyển: {best_action} (h={best_value})",
+                "message": f"Di chuyen: {best_action} (h={best_value})",
                 "heuristic": best_value,
                 "depth": current_node.depth
             })
             step += 1
+
+    def generate_steps_steepest_ascent(self, start):
+        self.steps = []
+        step = 1
+        current = start
+        current_h = self.tile_manhattan_distance(current)
+        current_node = Node(current, depth=0)
+        iterations = 0
+
+        self.steps.append({
+            "step": step,
+            "node": current_node,
+            "state": current,
+            "frontier": [current_node],
+            "action": "START",
+            "message": f"Bat dau Steepest Ascent Hill Climbing (h={current_h})",
+            "heuristic": current_h,
+            "depth": "-"
+        })
+        step += 1
+
+        while iterations < 1000:
+            if is_goal(current):
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tim thay goal!",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                return
+
+            neighbors = []
+            best_node = None
+            best_h = current_h
+
+            for action in get_actions(current):
+                neighbor = execute_action(current, action)
+                h_val = self.tile_manhattan_distance(neighbor)
+                neighbor_node = Node(neighbor, parent=current_node, action=action, depth=current_node.depth + 1)
+                neighbors.append((neighbor_node, h_val))
+                if h_val < best_h:
+                    best_node = neighbor_node
+                    best_h = h_val
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": neighbors,
+                "action": "EXPAND",
+                "message": f"Sinh {len(neighbors)} neighbor, chon h nho nhat",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+            if best_node is None:
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "LOCAL_OPTIMUM",
+                    "message": "Dung tai cuc tri cuc bo",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                return
+
+            current_node = best_node
+            current = current_node.state
+            current_h = best_h
+            iterations += 1
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": [current_node],
+                "action": "MOVE",
+                "message": f"Di chuyen: {current_node.action} (h={current_h})",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+    def generate_steps_stochastic(self, start):
+        self.steps = []
+        step = 1
+        current = start
+        current_h = self.tile_manhattan_distance(current)
+        current_node = Node(current, depth=0)
+        iterations = 0
+
+        self.steps.append({
+            "step": step,
+            "node": current_node,
+            "state": current,
+            "frontier": [current_node],
+            "action": "START",
+            "message": f"Bat dau Stochastic Hill Climbing (h={current_h})",
+            "heuristic": current_h,
+            "depth": "-"
+        })
+        step += 1
+
+        while iterations < 1000:
+            if is_goal(current):
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tim thay goal!",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                return
+
+            better_neighbors = []
+            all_neighbors = []
+            for action in get_actions(current):
+                neighbor = execute_action(current, action)
+                h_val = self.tile_manhattan_distance(neighbor)
+                neighbor_node = Node(neighbor, parent=current_node, action=action, depth=current_node.depth + 1)
+                all_neighbors.append((neighbor_node, h_val))
+                if h_val < current_h:
+                    better_neighbors.append((neighbor_node, h_val))
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": all_neighbors,
+                "action": "EXPAND",
+                "message": f"Sinh {len(all_neighbors)} neighbor, co {len(better_neighbors)} tot hon",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+            if not better_neighbors:
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "LOCAL_OPTIMUM",
+                    "message": "Khong co neighbor tot hon",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                return
+
+            current_node, current_h = random.choice(better_neighbors)
+            current = current_node.state
+            iterations += 1
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": [current_node],
+                "action": "MOVE",
+                "message": f"Chon ngau nhien: {current_node.action} (h={current_h})",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+    def append_hill_climbing_process(self, current_node, step, max_iterations=100, prefix="HC"):
+        current = current_node.state
+        current_h = self.tile_manhattan_distance(current)
+
+        for iteration in range(max_iterations):
+            best_node = None
+            best_h = current_h
+            neighbors = []
+
+            for action in get_actions(current):
+                neighbor = execute_action(current, action)
+                h_val = self.tile_manhattan_distance(neighbor)
+                neighbor_node = Node(neighbor, parent=current_node, action=action, depth=current_node.depth + 1)
+                neighbors.append((neighbor_node, h_val))
+                if h_val < best_h:
+                    best_node = neighbor_node
+                    best_h = h_val
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": neighbors,
+                "action": f"{prefix}_EXPAND",
+                "message": f"{prefix} lap {iteration + 1}: xet {len(neighbors)} neighbor",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+            if best_node is None:
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": f"{prefix}_STOP",
+                    "message": f"{prefix}: dung tai local optimum h={current_h}",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                step += 1
+                break
+
+            current_node = best_node
+            current = current_node.state
+            current_h = best_h
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": [current_node],
+                "action": f"{prefix}_MOVE",
+                "message": f"{prefix}: di chuyen {current_node.action}, h={current_h}",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+
+            if is_goal(current):
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tim thay goal!",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                step += 1
+                break
+
+        return current_node, current_h, step
+
+    def generate_steps_random_restart(self, start):
+        self.steps = []
+        step = 1
+        best_node = None
+        best_h = float("inf")
+        num_restarts = 10
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start,
+            "frontier": [],
+            "action": "START",
+            "message": f"Bat dau Random Restart Hill Climbing ({num_restarts} lan)",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        for restart in range(num_restarts):
+            restart_state = start if restart == 0 else random_initial_state()
+            restart_node = Node(restart_state, depth=0)
+            restart_h = self.tile_manhattan_distance(restart_state)
+
+            self.steps.append({
+                "step": step,
+                "node": restart_node,
+                "state": restart_state,
+                "frontier": [restart_node],
+                "action": "RESTART",
+                "message": f"Restart #{restart + 1} (h={restart_h})",
+                "heuristic": restart_h,
+                "depth": "-"
+            })
+            step += 1
+
+            result_node, result_h, step = self.append_hill_climbing_process(
+                restart_node,
+                step,
+                max_iterations=100,
+                prefix=f"R{restart + 1}"
+            )
+            if result_h < best_h:
+                best_node = result_node
+                best_h = result_h
+
+            self.steps.append({
+                "step": step,
+                "node": result_node,
+                "state": result_node.state,
+                "frontier": [result_node],
+                "action": "RESULT",
+                "message": f"Ket qua restart #{restart + 1}: h={result_h}",
+                "heuristic": result_h,
+                "depth": result_node.depth
+            })
+            step += 1
+
+            if is_goal(result_node.state):
+                return
+
+        self.steps.append({
+            "step": step,
+            "node": best_node,
+            "state": best_node.state,
+            "frontier": [],
+            "action": "BEST",
+            "message": f"Khong thay goal, trang thai tot nhat h={best_h}",
+            "heuristic": best_h,
+            "depth": best_node.depth
+        })
+
+    def generate_steps_local_beam(self, start, use_hill_climbing=False):
+        self.steps = []
+        step = 1
+        k = 3
+        max_iterations = 100
+        start_node = Node(start, depth=0)
+        beam = [start_node]
+        name = "Local Beam + Hill Climbing" if use_hill_climbing else "Local Beam Search"
+
+        self.steps.append({
+            "step": step,
+            "node": start_node,
+            "state": start,
+            "frontier": beam.copy(),
+            "action": "START",
+            "message": f"Bat dau {name} (k={k})",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        for iteration in range(max_iterations):
+            for node in beam:
+                if is_goal(node.state):
+                    self.steps.append({
+                        "step": step,
+                        "node": node,
+                        "state": node.state,
+                        "frontier": [],
+                        "action": "GOAL",
+                        "message": "Tim thay goal!",
+                        "heuristic": 0,
+                        "depth": node.depth
+                    })
+                    return
+
+            successors = []
+            expanded = []
+            seen = set(state_to_string(node.state) for node in beam)
+            for node in beam:
+                for action in get_actions(node.state):
+                    child_state = execute_action(node.state, action)
+                    child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
+                    h_val = self.tile_manhattan_distance(child_state)
+                    expanded.append((child, h_val))
+                    if use_hill_climbing:
+                        self.steps.append({
+                            "step": step,
+                            "node": child,
+                            "state": child.state,
+                            "frontier": [child],
+                            "action": "HC_START",
+                            "message": f"Chay Hill Climbing cho successor {action} (h={h_val})",
+                            "heuristic": h_val,
+                            "depth": child.depth
+                        })
+                        step += 1
+                        child, h_val, step = self.append_hill_climbing_process(
+                            child,
+                            step,
+                            max_iterations=50,
+                            prefix="BEAM_HC"
+                        )
+                    child_key = state_to_string(child.state)
+                    if child_key not in seen:
+                        successors.append((child, h_val))
+                        seen.add(child_key)
+
+            self.steps.append({
+                "step": step,
+                "node": beam[0] if beam else None,
+                "state": beam[0].state if beam else start,
+                "frontier": expanded,
+                "action": "EXPAND",
+                "message": f"Lap {iteration + 1}: mo rong {len(beam)} state, sinh {len(expanded)} successor",
+                "heuristic": "-",
+                "depth": beam[0].depth if beam else "-"
+            })
+            step += 1
+
+            successors.sort(key=lambda item: item[1])
+            beam = [node for node, _ in successors[:k]]
+
+            self.steps.append({
+                "step": step,
+                "node": beam[0] if beam else None,
+                "state": beam[0].state if beam else start,
+                "frontier": [(node, h_val) for node, h_val in successors[:k]],
+                "action": "ITERATION",
+                "message": f"Lap {iteration + 1}: sinh {len(successors)} successor, giu {len(beam)} tot nhat",
+                "heuristic": successors[0][1] if successors else "-",
+                "depth": beam[0].depth if beam else "-"
+            })
+            step += 1
+
+            if not successors or len(set(state_to_string(node.state) for node in beam)) <= 1:
+                break
+
+        best = beam[0] if beam else start_node
+        best_h = self.tile_manhattan_distance(best.state)
+        self.steps.append({
+            "step": step,
+            "node": best,
+            "state": best.state,
+            "frontier": [],
+            "action": "BEST",
+            "message": f"Khong thay goal, trang thai tot nhat h={best_h}",
+            "heuristic": best_h,
+            "depth": best.depth
+        })
 
 class PuzzleApp(ctk.CTk):
     def __init__(self):
@@ -852,7 +1296,10 @@ class PuzzleApp(ctk.CTk):
 
         ctk.CTkLabel(algo_frame, text="Thuật toán:", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 10))
 
-        self.algo_menu = ctk.CTkComboBox(algo_frame, values=["BFS", "DFS", "IDS", "UCS", "Greedy", "A*", "IDA*", "Hill Climbing"],
+        self.algo_menu = ctk.CTkComboBox(algo_frame, values=[
+            "BFS", "DFS", "IDS", "UCS", "Greedy", "A*", "IDA*", "Hill Climbing",
+            "Steepest Ascent", "Stochastic", "Random Restart", "Local Beam", "Local Beam + HC"
+        ],
             command=self.change_algorithm, width=150, height=32)
         self.algo_menu.set("BFS")
         self.algo_menu.pack(side="left")
@@ -954,6 +1401,16 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_ida_star(self.initial_state)
         elif self.algorithm == "Hill Climbing":
             self.solver.generate_steps_hill_climbing(self.initial_state)
+        elif self.algorithm == "Steepest Ascent":
+            self.solver.generate_steps_steepest_ascent(self.initial_state)
+        elif self.algorithm == "Stochastic":
+            self.solver.generate_steps_stochastic(self.initial_state)
+        elif self.algorithm == "Random Restart":
+            self.solver.generate_steps_random_restart(self.initial_state)
+        elif self.algorithm == "Local Beam":
+            self.solver.generate_steps_local_beam(self.initial_state)
+        elif self.algorithm == "Local Beam + HC":
+            self.solver.generate_steps_local_beam(self.initial_state, use_hill_climbing=True)
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")

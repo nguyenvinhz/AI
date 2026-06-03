@@ -60,7 +60,6 @@ def execute_action(s, action):
 
 
 def manhattan_distance(s):
-    """Tính Manhattan distance - heuristic h(n)"""
     distance = 0
     for i in range(3):
         for j in range(3):
@@ -73,17 +72,10 @@ def manhattan_distance(s):
 
 
 def local_beam_search(initial_state, k=3, max_iterations=1000):
-    """
-    Thuật toán Local Beam Search
-    - Duy trì k trạng thái tốt nhất tại mỗi bước
-    - Sử dụng >= để so sánh các giá trị heuristic
-    - k: số lượng trạng thái được duy trì
-    """
     print("=" * 50)
     print(f"LOCAL BEAM SEARCH (k={k})")
     print("=" * 50)
 
-    # Khởi tạo beam với trạng thái ban đầu
     beam = [initial_state]
     current_h = manhattan_distance(initial_state)
     iteration = 0
@@ -94,10 +86,9 @@ def local_beam_search(initial_state, k=3, max_iterations=1000):
     print_table(initial_state)
 
     while iteration < max_iterations:
-        # Nếu trạng thái mục tiêu trong beam
         for state in beam:
             if state == goal:
-                print("✓ Tìm thấy giải pháp!")
+                print("Tìm thấy giải pháp!")
                 result = {
                     'success': True,
                     'solution': state,
@@ -109,7 +100,6 @@ def local_beam_search(initial_state, k=3, max_iterations=1000):
                 print("=" * 50)
                 return result
 
-        # Sinh tất cả hàng xóm từ mỗi trạng thái trong beam
         successors = []
         for state in beam:
             actions = find_action(state)
@@ -118,12 +108,10 @@ def local_beam_search(initial_state, k=3, max_iterations=1000):
                 next_h = manhattan_distance(next_state)
                 successors.append((next_h, next_state))
 
-        # Nếu không có successor, dừng
         if not successors:
             print(f"Đạt cực bộ tại lần lặp {iteration}")
             break
 
-        # Sắp xếp successor theo h(n) và chọn k tốt nhất (sử dụng <=)
         successors.sort(key=lambda x: x[0])
         beam = [successor[1] for successor in successors[:k]]
 
@@ -138,7 +126,6 @@ def local_beam_search(initial_state, k=3, max_iterations=1000):
             print(f"  Trạng thái {i+1}: h(n) = {h}")
             print_table(state)
 
-        # Nếu all_states được lựa chọn bằng nhau (==), có thể dừng
         if len(set(state_to_string(s) for s in beam)) == 1:
             print(f"Beam hội tụ - tất cả trạng thái bằng nhau")
             break

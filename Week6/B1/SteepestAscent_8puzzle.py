@@ -59,7 +59,6 @@ def execute_action(s, action):
 
 
 def manhattan_distance(s):
-    """Tính Manhattan distance - heuristic h(n)"""
     distance = 0
     for i in range(3):
         for j in range(3):
@@ -72,11 +71,6 @@ def manhattan_distance(s):
 
 
 def steepest_ascent_hill_climbing(initial_state, max_iterations=1000):
-    """
-    Thuật toán Dốc Nhất (Steepest Ascent Hill Climbing)
-    - Luôn chọn hàng xóm có giá trị heuristic tốt nhất
-    - Dùng "=" để so sánh khi giá trị bằng nhau
-    """
     current = initial_state
     current_h = manhattan_distance(current)
     iterations = 0
@@ -100,19 +94,16 @@ def steepest_ascent_hill_climbing(initial_state, max_iterations=1000):
         best_h = current_h
         best_action = None
 
-        # Tìm hàng xóm tốt nhất (với h(n) nhỏ nhất)
         for action in actions:
             next_state = execute_action(current, action)
             next_h = manhattan_distance(next_state)
             
-            # Sử dụng >= thay vì > để so sánh
             if next_h <= best_h:
                 best_next = next_state
                 best_h = next_h
                 best_action = action
 
-        # Nếu không tìm được hàng xóm tốt hơn, dừng
-        if best_h >= current_h:  # Sử dụng >= để so sánh
+        if best_h >= current_h:
             print(f"Đạt cực bộ tại lần lặp {iterations}")
             print(f"h(n) = {current_h}")
             print_table(current)
@@ -127,7 +118,6 @@ def steepest_ascent_hill_climbing(initial_state, max_iterations=1000):
         print(f"Lần lặp {iterations}: Hành động = {best_action}, h(n) = {current_h}")
         print_table(current)
 
-        # Kiểm tra nếu đạt được trạng thái mục tiêu
         if current == goal:
             print("✓ Tìm thấy giải pháp!")
             break

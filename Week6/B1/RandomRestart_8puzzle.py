@@ -59,7 +59,6 @@ def execute_action(s, action):
 
 
 def manhattan_distance(s):
-    """Tính Manhattan distance - heuristic h(n)"""
     distance = 0
     for i in range(3):
         for j in range(3):
@@ -72,11 +71,6 @@ def manhattan_distance(s):
 
 
 def hill_climbing_single(initial_state, max_iterations=1000):
-    """
-    Một lần chạy Hill Climbing (Dốc nhất)
-    - Chọn hàng xóm tốt nhất (h(n) nhỏ nhất)
-    - Sử dụng >= để so sánh
-    """
     current = initial_state
     current_h = manhattan_distance(current)
     iterations = 0
@@ -91,18 +85,15 @@ def hill_climbing_single(initial_state, max_iterations=1000):
         best_h = current_h
         best_action = None
 
-        # Tìm hàng xóm tốt nhất
         for action in actions:
             next_state = execute_action(current, action)
             next_h = manhattan_distance(next_state)
             
-            # Sử dụng <= để so sánh
             if next_h <= best_h:
                 best_next = next_state
                 best_h = next_h
                 best_action = action
 
-        # Nếu không tìm được hàng xóm tốt hơn, dừng
         if best_h >= current_h:
             break
 
@@ -110,7 +101,6 @@ def hill_climbing_single(initial_state, max_iterations=1000):
         current_h = best_h
         iterations += 1
 
-        # Kiểm tra nếu đạt được trạng thái mục tiêu
         if current == goal:
             return {
                 'success': True,
@@ -128,11 +118,6 @@ def hill_climbing_single(initial_state, max_iterations=1000):
 
 
 def random_restart_hill_climbing(initial_state, num_restarts=10, max_iterations=1000):
-    """
-    Thuật toán Random Restart Hill Climbing
-    - Chạy Hill Climbing nhiều lần từ các trạng thái ban đầu khác nhau
-    - Sử dụng >= để so sánh các giá trị heuristic
-    """
     print("=" * 50)
     print("RANDOM RESTART HILL CLIMBING")
     print("=" * 50)
@@ -145,25 +130,21 @@ def random_restart_hill_climbing(initial_state, num_restarts=10, max_iterations=
     for restart in range(num_restarts):
         print(f"--- Lần khởi động lại #{restart + 1} ---")
         
-        # Tạo trạng thái ban đầu ngẫu nhiên
         random_start = random_initial_state()
         print(f"Trạng thái ban đầu - h(n) = {manhattan_distance(random_start)}:")
         print_table(random_start)
 
-        # Chạy Hill Climbing một lần
         result = hill_climbing_single(random_start, max_iterations)
         results.append(result)
 
         final_h = result['final_h']
         print(f"Kết quả: {'Thành công' if result['success'] else 'Thất bại'}, h(n) = {final_h}, Lần lặp = {result['iterations']}\n")
 
-        # Lưu kết quả tốt nhất
         if result['success']:
             print("✓ Tìm thấy giải pháp!")
             best_result = result
             break
         
-        # So sánh với >= để theo dõi cực bộ tốt nhất
         if final_h <= best_h:
             best_h = final_h
             best_result = result
