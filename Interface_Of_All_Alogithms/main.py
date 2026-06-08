@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import copy
+import math
 import random
 from collections import deque
 import heapq
@@ -359,6 +360,145 @@ class StepBasedSolver:
                     goal_j = (value - 1) % 3
                     distance += abs(i - goal_i) + abs(j - goal_j)
         return distance
+
+    def all_actions(self):
+        return ["UP", "DOWN", "LEFT", "RIGHT"]
+
+    def opposite_action(self, action):
+        opposites = {
+            "UP": "DOWN",
+            "DOWN": "UP",
+            "LEFT": "RIGHT",
+            "RIGHT": "LEFT"
+        }
+        return opposites[action]
+
+    def execute_action_with_wall(self, state, action):
+        if action in get_actions(state):
+            return execute_action(state, action)
+        return copy.deepcopy(state)
+
+    def belief_to_string(self, belief_state):
+        return "|".join(state_to_string(state) for state in belief_state)
+
+    def belief_cost(self, belief_state):
+        return sum(self.tile_manhattan_distance(state) for state in belief_state)
+
+    def is_belief_goal(self, belief_state):
+        return all(is_goal(state) for state in belief_state)
+
+    def execute_belief_action(self, belief_state, action):
+        return [
+            self.execute_action_with_wall(state, action)
+            for state in belief_state
+        ]
+
+    def predecessor_states(self, state, action):
+        predecessors = []
+        if action not in get_actions(state):
+            predecessors.append(copy.deepcopy(state))
+
+        reverse_action = self.opposite_action(action)
+        if reverse_action in get_actions(state):
+            predecessors.append(execute_action(state, reverse_action))
+
+        return predecessors
+
+    def random_plan(self, length=7):
+        actions_from_goal = []
+        state = copy.deepcopy(GOAL_STATE)
+
+        for _ in range(length):
+            choices = [
+                action
+                for action in self.all_actions()
+                if self.predecessor_states(state, action)
+            ]
+            action = random.choice(choices)
+            state = random.choice(self.predecessor_states(state, action))
+            actions_from_goal.append(action)
+
+        return list(reversed(actions_from_goal))
+
+    def make_state_from_plan(self, plan):
+        state = copy.deepcopy(GOAL_STATE)
+
+        for action in reversed(plan):
+            choices = self.predecessor_states(state, action)
+            if not choices:
+                return None
+            state = random.choice(choices)
+
+        return state
+
+    def run_plan(self, state, plan):
+        current = copy.deepcopy(state)
+        for action in plan:
+            current = self.execute_action_with_wall(current, action)
+        return current
+
+    def belief_greedy_result(self, initial_belief, max_expansions=1000):
+        counter = 0
+        start = copy.deepcopy(initial_belief)
+        frontier = [(self.belief_cost(start), counter, start, [])]
+        visited = {self.belief_to_string(start)}
+        expansions = 0
+
+        while frontier and expansions < max_expansions:
+            _, _, belief_state, actions_taken = heapq.heappop(frontier)
+            expansions += 1
+
+            if self.is_belief_goal(belief_state):
+                return {
+                    "success": True,
+                    "actions": actions_taken,
+                    "final_belief": belief_state
+                }
+
+            for action in self.all_actions():
+                next_belief = self.execute_belief_action(belief_state, action)
+                next_key = self.belief_to_string(next_belief)
+                if next_key in visited:
+                    continue
+
+                visited.add(next_key)
+                counter += 1
+                heapq.heappush(frontier, (
+                    self.belief_cost(next_belief),
+                    counter,
+                    next_belief,
+                    actions_taken + [action]
+                ))
+
+        return {"success": False, "actions": [], "final_belief": None}
+
+    def random_belief_state(self, size=3, plan_length=7, max_attempts=1000, min_solution_steps=4):
+        for _ in range(max_attempts):
+            plan = self.random_plan(plan_length)
+            belief_state = []
+            seen = set()
+            state_attempts = 0
+
+            while len(belief_state) < size and state_attempts < 100:
+                state_attempts += 1
+                state = self.make_state_from_plan(plan)
+                if state is None:
+                    break
+
+                key = state_to_string(state)
+                if key not in seen and state != GOAL_STATE and self.run_plan(state, plan) == GOAL_STATE:
+                    belief_state.append(state)
+                    seen.add(key)
+
+            if len(belief_state) == size and self.belief_cost(belief_state) >= plan_length:
+                if min_solution_steps <= 0:
+                    return belief_state
+
+                result = self.belief_greedy_result(belief_state)
+                if result["success"] and len(result["actions"]) >= min_solution_steps:
+                    return belief_state
+
+        return self.random_belief_state(size, plan_length, max_attempts, min_solution_steps - 1)
 
     def count_inversions(self, state):
         tiles = []
@@ -1239,6 +1379,197 @@ class StepBasedSolver:
             "depth": best.depth
         })
 
+    def generate_steps_simulated_annealing(self, start):
+        self.steps = []
+        step = 1
+        current = start
+        current_h = self.tile_manhattan_distance(current)
+        best = copy.deepcopy(current)
+        best_h = current_h
+        temperature = 100.0
+        cooling_rate = 0.95
+        min_temperature = 0.01
+        max_iterations = 300
+        current_node = Node(current, depth=0)
+
+        self.steps.append({
+            "step": step,
+            "node": current_node,
+            "state": current,
+            "frontier": [current_node],
+            "action": "START",
+            "message": f"Bat dau Simulated Annealing (h={current_h}, T={temperature:.2f})",
+            "heuristic": current_h,
+            "depth": "-"
+        })
+        step += 1
+
+        for iteration in range(1, max_iterations + 1):
+            if is_goal(current):
+                self.steps.append({
+                    "step": step,
+                    "node": current_node,
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": "Tim thay goal!",
+                    "heuristic": current_h,
+                    "depth": current_node.depth
+                })
+                return
+
+            if temperature < min_temperature:
+                break
+
+            action = random.choice(get_actions(current))
+            next_state = execute_action(current, action)
+            next_h = self.tile_manhattan_distance(next_state)
+            delta = current_h - next_h
+
+            if delta >= 0:
+                accepted = True
+                probability = 1.0
+            else:
+                probability = math.exp(delta / temperature)
+                accepted = random.random() < probability
+
+            next_node = Node(next_state, parent=current_node, action=action, depth=current_node.depth + 1)
+            decision = "accepted" if accepted else "rejected"
+
+            if accepted:
+                current = next_state
+                current_h = next_h
+                current_node = next_node
+
+                if current_h < best_h:
+                    best = copy.deepcopy(current)
+                    best_h = current_h
+
+            self.steps.append({
+                "step": step,
+                "node": current_node,
+                "state": current,
+                "frontier": [(next_node, next_h)],
+                "action": "ANNEAL",
+                "message": f"Lap {iteration}: {action}, h {self.tile_manhattan_distance(next_node.parent.state)}->{next_h}, T={temperature:.2f}, P={probability:.3f}, {decision}",
+                "heuristic": current_h,
+                "depth": current_node.depth
+            })
+            step += 1
+            temperature *= cooling_rate
+
+        best_node = Node(best, depth=0)
+        self.steps.append({
+            "step": step,
+            "node": best_node,
+            "state": best,
+            "frontier": [],
+            "action": "BEST",
+            "message": f"Khong thay goal, trang thai tot nhat h={best_h}",
+            "heuristic": best_h,
+            "depth": "-"
+        })
+
+    def generate_steps_belief_greedy(self):
+        self.steps = []
+        step = 1
+        counter = 0
+        start = self.random_belief_state(size=3)
+        start_cost = self.belief_cost(start)
+        frontier = [(start_cost, counter, start, [])]
+        visited = {self.belief_to_string(start)}
+        expansions = 0
+        max_expansions = 5000
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start[0],
+            "belief": start,
+            "frontier": [{"belief": start, "cost": start_cost, "path": []}],
+            "action": "START",
+            "message": f"Bat dau Greedy Belief State, h(n)={start_cost}",
+            "heuristic": start_cost,
+            "depth": "-"
+        })
+        step += 1
+
+        while frontier and expansions < max_expansions:
+            cost, _, belief_state, actions_taken = heapq.heappop(frontier)
+            expansions += 1
+
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": belief_state[0],
+                "belief": belief_state,
+                "frontier": [{"belief": belief_state, "cost": cost, "path": actions_taken}],
+                "action": "POP",
+                "message": f"Mo rong belief #{expansions}, path={actions_taken if actions_taken else 'START'}, h(n)={cost}",
+                "heuristic": cost,
+                "depth": len(actions_taken)
+            })
+            step += 1
+
+            if self.is_belief_goal(belief_state):
+                self.steps.append({
+                    "step": step,
+                    "node": None,
+                    "state": belief_state[0],
+                    "belief": belief_state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Ca 3 trang thai deu ve goal. Path={actions_taken}",
+                    "heuristic": 0,
+                    "depth": len(actions_taken)
+                })
+                return
+
+            candidates = []
+            for action in self.all_actions():
+                next_belief = self.execute_belief_action(belief_state, action)
+                next_key = self.belief_to_string(next_belief)
+                if next_key in visited:
+                    continue
+
+                visited.add(next_key)
+                next_cost = self.belief_cost(next_belief)
+                next_path = actions_taken + [action]
+                counter += 1
+                heapq.heappush(frontier, (next_cost, counter, next_belief, next_path))
+                candidates.append({
+                    "belief": next_belief,
+                    "cost": next_cost,
+                    "path": next_path,
+                    "action": action
+                })
+
+            candidates.sort(key=lambda item: item["cost"])
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": belief_state[0],
+                "belief": belief_state,
+                "frontier": candidates,
+                "action": "EXPAND",
+                "message": f"Sinh {len(candidates)} belief moi, chon theo h(n) nho nhat",
+                "heuristic": cost,
+                "depth": len(actions_taken)
+            })
+            step += 1
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start[0],
+            "belief": start,
+            "frontier": [],
+            "action": "FAILED",
+            "message": "Khong tim thay goal belief trong gioi han",
+            "heuristic": "-",
+            "depth": "-"
+        })
+
 class PuzzleApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -1298,7 +1629,8 @@ class PuzzleApp(ctk.CTk):
 
         self.algo_menu = ctk.CTkComboBox(algo_frame, values=[
             "BFS", "DFS", "IDS", "UCS", "Greedy", "A*", "IDA*", "Hill Climbing",
-            "Steepest Ascent", "Stochastic", "Random Restart", "Local Beam", "Local Beam + HC"
+            "Steepest Ascent", "Stochastic", "Random Restart", "Local Beam", "Local Beam + HC",
+            "Simulated Annealing", "Belief State"
         ],
             command=self.change_algorithm, width=150, height=32)
         self.algo_menu.set("BFS")
@@ -1411,6 +1743,10 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_local_beam(self.initial_state)
         elif self.algorithm == "Local Beam + HC":
             self.solver.generate_steps_local_beam(self.initial_state, use_hill_climbing=True)
+        elif self.algorithm == "Simulated Annealing":
+            self.solver.generate_steps_simulated_annealing(self.initial_state)
+        elif self.algorithm == "Belief State":
+            self.solver.generate_steps_belief_greedy()
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")
@@ -1449,6 +1785,12 @@ class PuzzleApp(ctk.CTk):
                 node, value = item
                 state_str = str(node.state).replace(", ", ",")
                 frontier_text += f"{i+1}. {state_str} (h={value})\n"
+            elif isinstance(item, dict) and "belief" in item:
+                frontier_text += f"{i+1}. h={item.get('cost')} path={item.get('path', [])}\n"
+                for state_index, state in enumerate(item["belief"], start=1):
+                    state_str = str(state).replace(", ", ",")
+                    frontier_text += f"   State {state_index}: {state_str}\n"
+                frontier_text += "\n"
         
         self.frontier_box.configure(state="normal")
         self.frontier_box.delete("1.0", "end")
