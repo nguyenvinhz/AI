@@ -1570,6 +1570,287 @@ class StepBasedSolver:
             "depth": "-"
         })
 
+    def run_belief_plan(self, belief_state, plan):
+        current = copy.deepcopy(belief_state)
+        trace = [self.belief_to_string(current)]
+
+        for action in plan:
+            current = self.execute_belief_action(current, action)
+            trace.append(self.belief_to_string(current))
+
+        return current, trace
+
+    def random_belief_state_with_plan(self, size=3, plan_length=7, max_attempts=1000):
+        for _ in range(max_attempts):
+            plan = self.random_plan(plan_length)
+            belief_state = []
+            seen = set()
+
+            while len(belief_state) < size:
+                state = self.make_state_from_plan(plan)
+                if state is None:
+                    break
+
+                key = state_to_string(state)
+                if key not in seen and state != GOAL_STATE and self.run_plan(state, plan) == GOAL_STATE:
+                    belief_state.append(state)
+                    seen.add(key)
+
+            if len(belief_state) == size:
+                final_belief, trace = self.run_belief_plan(belief_state, plan)
+                if self.is_belief_goal(final_belief) and len(trace) == len(set(trace)):
+                    return belief_state, plan
+
+        return self.random_belief_state_with_plan(size, max(3, plan_length - 1), max_attempts)
+
+    def generate_steps_belief_bs_bg_dfs(self):
+        self.steps = []
+        step = 1
+        start, plan = self.random_belief_state_with_plan(size=3)
+        stack = [(start, [])]
+        explored = set()
+        max_steps = len(plan) + 1
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start[0],
+            "belief": start,
+            "frontier": [{"belief": start, "cost": self.belief_cost(start), "path": []}],
+            "action": "START",
+            "message": f"Bat dau Belief State BS-BG DFS. Plan random={plan}",
+            "heuristic": self.belief_cost(start),
+            "depth": "-"
+        })
+        step += 1
+
+        while stack and step <= max_steps + 1:
+            belief_state, actions_taken = stack.pop()
+            belief_key = self.belief_to_string(belief_state)
+            if belief_key in explored:
+                continue
+
+            explored.add(belief_key)
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": belief_state[0],
+                "belief": belief_state,
+                "frontier": [{"belief": belief_state, "cost": self.belief_cost(belief_state), "path": actions_taken}],
+                "action": actions_taken[-1] if actions_taken else "POP",
+                "message": f"Node {len(explored)} | Frontier={len(stack)} | Explored={len(explored)} | Path={actions_taken if actions_taken else 'START'}",
+                "heuristic": self.belief_cost(belief_state),
+                "depth": len(actions_taken)
+            })
+            step += 1
+
+            if self.is_belief_goal(belief_state):
+                self.steps.append({
+                    "step": step,
+                    "node": None,
+                    "state": belief_state[0],
+                    "belief": belief_state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Ca 3 trang thai deu nam trong BG. Path={actions_taken}",
+                    "heuristic": 0,
+                    "depth": len(actions_taken),
+                    "solution": actions_taken
+                })
+                return
+
+            if len(actions_taken) < len(plan):
+                action = plan[len(actions_taken)]
+                next_belief = self.execute_belief_action(belief_state, action)
+                if self.belief_to_string(next_belief) not in explored:
+                    stack.append((next_belief, actions_taken + [action]))
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start[0],
+            "belief": start,
+            "frontier": [],
+            "action": "FAILED",
+            "message": "Khong tim thay BG trong gioi han DFS",
+            "heuristic": "-",
+            "depth": "-"
+        })
+
+    def generate_steps_nondeterministic_heuristic(self):
+        self.steps = []
+        step = 1
+        counter = 0
+        start = self.random_belief_state(size=3)
+        start_cost = self.belief_cost(start)
+        frontier = [(start_cost, counter, start, [])]
+        visited = {self.belief_to_string(start)}
+        expansions = 0
+        max_expansions = 5000
+
+        self.steps.append({
+            "step": step,
+            "node": None,
+            "state": start[0],
+            "belief": start,
+            "frontier": [{"belief": start, "cost": start_cost, "path": []}],
+            "action": "START",
+            "message": f"Bat dau tim kiem khong xac dinh co goi y, h(n)={start_cost}",
+            "heuristic": start_cost,
+            "depth": "-"
+        })
+        step += 1
+
+        while frontier and expansions < max_expansions:
+            cost, _, belief_state, actions_taken = heapq.heappop(frontier)
+            expansions += 1
+
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": belief_state[0],
+                "belief": belief_state,
+                "frontier": [{"belief": belief_state, "cost": cost, "path": actions_taken}],
+                "action": "POP",
+                "message": f"Mo rong belief #{expansions}, h(n)={cost}, path={actions_taken if actions_taken else 'START'}",
+                "heuristic": cost,
+                "depth": len(actions_taken)
+            })
+            step += 1
+
+            if self.is_belief_goal(belief_state):
+                self.steps.append({
+                    "step": step,
+                    "node": None,
+                    "state": belief_state[0],
+                    "belief": belief_state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Dat goal voi path={actions_taken}",
+                    "heuristic": 0,
+                    "depth": len(actions_taken),
+                    "solution": actions_taken
+                })
+                return
+
+            candidates = []
+            for action in self.all_actions():
+                next_belief = self.execute_belief_action(belief_state, action)
+                next_key = self.belief_to_string(next_belief)
+                if next_key in visited:
+                    continue
+
+                visited.add(next_key)
+                next_cost = self.belief_cost(next_belief)
+                next_path = actions_taken + [action]
+                counter += 1
+                heapq.heappush(frontier, (next_cost, counter, next_belief, next_path))
+                candidates.append({
+                    "belief": next_belief,
+                    "cost": next_cost,
+                    "path": next_path,
+                    "action": action
+                })
+
+            candidates.sort(key=lambda item: item["cost"])
+            self.steps.append({
+                "step": step,
+                "node": None,
+                "state": belief_state[0],
+                "belief": belief_state,
+                "frontier": candidates,
+                "action": "EXPAND",
+                "message": f"Sinh {len(candidates)} ket qua, uu tien h(n) nho nhat",
+                "heuristic": cost,
+                "depth": len(actions_taken)
+            })
+            step += 1
+
+    def random_and_or_initial_state(self, plan_length=5):
+        state = copy.deepcopy(GOAL_STATE)
+        scramble_actions = []
+        previous_action = None
+
+        while len(scramble_actions) < plan_length:
+            choices = get_actions(state)
+            if previous_action:
+                reverse = self.opposite_action(previous_action)
+                filtered = [action for action in choices if action != reverse]
+                if filtered:
+                    choices = filtered
+
+            action = random.choice(choices)
+            state = execute_action(state, action)
+            scramble_actions.append(action)
+            previous_action = action
+
+        solution_plan = [self.opposite_action(action) for action in reversed(scramble_actions)]
+        return state, solution_plan
+
+    def generate_steps_and_or_graph_search(self):
+        self.steps = []
+        step = 1
+        current, plan = self.random_and_or_initial_state()
+        path = []
+
+        self.steps.append({
+            "step": step,
+            "node": Node(current, depth=0),
+            "state": current,
+            "frontier": [],
+            "action": "START",
+            "message": f"Bat dau AND-OR Graph Search. Plan random={plan}",
+            "heuristic": self.tile_manhattan_distance(current),
+            "depth": "-"
+        })
+        step += 1
+
+        for depth, action in enumerate(plan):
+            state_key = state_to_string(current)
+            self.steps.append({
+                "step": step,
+                "node": Node(current, depth=depth),
+                "state": current,
+                "frontier": [],
+                "action": "OR_SEARCH",
+                "message": f"OR_SEARCH depth={depth}: state={state_key}",
+                "heuristic": self.tile_manhattan_distance(current),
+                "depth": depth
+            })
+            step += 1
+
+            if is_goal(current):
+                break
+
+            result = self.execute_action_with_wall(current, action)
+            path.append(action)
+            self.steps.append({
+                "step": step,
+                "node": Node(result, depth=depth + 1),
+                "state": result,
+                "frontier": [{"state": result, "action": action}],
+                "action": "AND_SEARCH",
+                "message": f"AND_SEARCH: action={action}, result_states=1",
+                "heuristic": self.tile_manhattan_distance(result),
+                "depth": depth + 1
+            })
+            step += 1
+            current = result
+
+        final_action = "GOAL" if is_goal(current) else "FAILED"
+        final_message = f"Tim thay goal. Plan={path}" if is_goal(current) else "AND-OR khong tim thay goal"
+        self.steps.append({
+            "step": step,
+            "node": Node(current, depth=len(path)),
+            "state": current,
+            "frontier": [],
+            "action": final_action,
+            "message": final_message,
+            "heuristic": self.tile_manhattan_distance(current),
+            "depth": len(path),
+            "solution": path
+        })
+
 class PuzzleApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -1586,6 +1867,18 @@ class PuzzleApp(ctk.CTk):
         self.cells = []
         self.solver = StepBasedSolver()
         self.algorithm = "BFS"
+        self.algorithm_values = [
+            "--- Uninformed Search ---",
+            "BFS", "DFS", "IDS", "UCS",
+            "--- Informed Search ---",
+            "Greedy", "A*", "IDA*",
+            "--- Local Search ---",
+            "Hill Climbing", "Steepest Ascent", "Stochastic", "Random Restart",
+            "Local Beam", "Local Beam + HC", "Simulated Annealing",
+            "--- Belief / Nondeterministic ---",
+            "Belief State Greedy", "Belief State (BS-BG DFS)",
+            "Nondeterministic Heuristic", "AND-OR Graph Search"
+        ]
 
         self.build_ui()
         self.update_board(self.initial_state)
@@ -1627,12 +1920,8 @@ class PuzzleApp(ctk.CTk):
 
         ctk.CTkLabel(algo_frame, text="Thuật toán:", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 10))
 
-        self.algo_menu = ctk.CTkComboBox(algo_frame, values=[
-            "BFS", "DFS", "IDS", "UCS", "Greedy", "A*", "IDA*", "Hill Climbing",
-            "Steepest Ascent", "Stochastic", "Random Restart", "Local Beam", "Local Beam + HC",
-            "Simulated Annealing", "Belief State"
-        ],
-            command=self.change_algorithm, width=150, height=32)
+        self.algo_menu = ctk.CTkComboBox(algo_frame, values=self.algorithm_values,
+            command=self.change_algorithm, width=245, height=32)
         self.algo_menu.set("BFS")
         self.algo_menu.pack(side="left")
 
@@ -1692,6 +1981,10 @@ class PuzzleApp(ctk.CTk):
         self.solution_box.configure(state="disabled")
 
     def change_algorithm(self, value):
+        if value.startswith("---"):
+            self.algo_menu.set(self.algorithm)
+            return
+
         self.algorithm = value
         self.algo_label.configure(text=f"Thuật toán: {value}")
 
@@ -1745,8 +2038,14 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_local_beam(self.initial_state, use_hill_climbing=True)
         elif self.algorithm == "Simulated Annealing":
             self.solver.generate_steps_simulated_annealing(self.initial_state)
-        elif self.algorithm == "Belief State":
+        elif self.algorithm == "Belief State Greedy":
             self.solver.generate_steps_belief_greedy()
+        elif self.algorithm == "Belief State (BS-BG DFS)":
+            self.solver.generate_steps_belief_bs_bg_dfs()
+        elif self.algorithm == "Nondeterministic Heuristic":
+            self.solver.generate_steps_nondeterministic_heuristic()
+        elif self.algorithm == "AND-OR Graph Search":
+            self.solver.generate_steps_and_or_graph_search()
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")
@@ -1791,6 +2090,9 @@ class PuzzleApp(ctk.CTk):
                     state_str = str(state).replace(", ", ",")
                     frontier_text += f"   State {state_index}: {state_str}\n"
                 frontier_text += "\n"
+            elif isinstance(item, dict) and "state" in item:
+                state_str = str(item["state"]).replace(", ", ",")
+                frontier_text += f"{i+1}. {item.get('action', '')}: {state_str}\n"
         
         self.frontier_box.configure(state="normal")
         self.frontier_box.delete("1.0", "end")
@@ -1799,9 +2101,13 @@ class PuzzleApp(ctk.CTk):
 
     def show_solution(self, solution):
         moves_text = ""
-        for i, node in enumerate(solution):
-            if node.action:
-                moves_text += f"{i}. {node.action}\n"
+        if solution and all(isinstance(action, str) for action in solution):
+            for i, action in enumerate(solution, start=1):
+                moves_text += f"{i}. {action}\n"
+        else:
+            for i, node in enumerate(solution):
+                if node.action:
+                    moves_text += f"{i}. {node.action}\n"
         
         self.solution_box.configure(state="normal")
         self.solution_box.delete("1.0", "end")
