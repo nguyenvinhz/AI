@@ -521,10 +521,10 @@ class StepBasedSolver:
         visited = set()
         counter = 0
         
-        start_cost = self.calculate_cost(start)
+        start_cost = 0
         start_node = Node(start, depth=0)
         heapq.heappush(heap, (start_cost, counter, state_to_string(start), start_node))
-        visited.add(state_to_string(start))
+        best_cost = {state_to_string(start): 0}
         
         self.steps.append({
             "step": step,
@@ -539,7 +539,11 @@ class StepBasedSolver:
         step += 1
         
         while heap:
-            _, _, _, node = heapq.heappop(heap)
+            cost, _, _, node = heapq.heappop(heap)
+            node_key = state_to_string(node.state)
+            if node_key in visited:
+                continue
+            visited.add(node_key)
             
             self.steps.append({
                 "step": step,
@@ -548,7 +552,7 @@ class StepBasedSolver:
                 "frontier": [n for _, _, _, n in heap],
                 "action": "POP",
                 "message": "Lấy node với cost thấp nhất",
-                "cost": self.calculate_cost(node.state),
+                "cost": cost,
                 "depth": node.depth
             })
             step += 1
@@ -562,7 +566,7 @@ class StepBasedSolver:
                     "frontier": [],
                     "action": "GOAL",
                     "message": "Tìm thấy goal!",
-                    "cost": self.calculate_cost(node.state),
+                    "cost": cost,
                     "depth": node.depth,
                     "solution": self.solution
                 })
@@ -573,11 +577,11 @@ class StepBasedSolver:
                 child_state = execute_action(node.state, action)
                 child_key = state_to_string(child_state)
                 
-                if child_key not in visited:
-                    visited.add(child_key)
+                child_cost = cost + 1
+                if child_key not in visited and child_cost < best_cost.get(child_key, float("inf")):
+                    best_cost[child_key] = child_cost
                     child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
                     children.append(child)
-                    child_cost = self.calculate_cost(child_state)
                     counter += 1
                     heapq.heappush(heap, (child_cost, counter, child_key, child))
             
@@ -588,7 +592,7 @@ class StepBasedSolver:
                 "frontier": [n for _, _, _, n in heap],
                 "action": "EXPAND",
                 "message": f"Sinh {len(children)} node con",
-                "cost": self.calculate_cost(node.state),
+                "cost": cost,
                 "depth": node.depth
             })
             step += 1
@@ -600,7 +604,7 @@ class StepBasedSolver:
         visited = set()
         counter = 0
         
-        start_heuristic = self.manhattan_distance(start)
+        start_heuristic = self.tile_manhattan_distance(start)
         start_node = Node(start, depth=0)
         heapq.heappush(heap, (start_heuristic, counter, state_to_string(start), start_node))
         visited.add(state_to_string(start))
@@ -627,7 +631,7 @@ class StepBasedSolver:
                 "frontier": [n for _, _, _, n in heap],
                 "action": "POP",
                 "message": "Lấy node với h(n) thấp nhất",
-                "heuristic": self.manhattan_distance(node.state),
+                "heuristic": self.tile_manhattan_distance(node.state),
                 "depth": node.depth
             })
             step += 1
@@ -641,7 +645,7 @@ class StepBasedSolver:
                     "frontier": [],
                     "action": "GOAL",
                     "message": "Tìm thấy goal!",
-                    "heuristic": self.manhattan_distance(node.state),
+                    "heuristic": self.tile_manhattan_distance(node.state),
                     "depth": node.depth,
                     "solution": self.solution
                 })
@@ -656,7 +660,7 @@ class StepBasedSolver:
                     visited.add(child_key)
                     child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
                     children.append(child)
-                    child_heuristic = self.manhattan_distance(child_state)
+                    child_heuristic = self.tile_manhattan_distance(child_state)
                     counter += 1
                     heapq.heappush(heap, (child_heuristic, counter, child_key, child))
             
@@ -667,7 +671,7 @@ class StepBasedSolver:
                 "frontier": [n for _, _, _, n in heap],
                 "action": "EXPAND",
                 "message": f"Sinh {len(children)} node con",
-                "heuristic": self.manhattan_distance(node.state),
+                "heuristic": self.tile_manhattan_distance(node.state),
                 "depth": node.depth
             })
             step += 1
@@ -676,15 +680,16 @@ class StepBasedSolver:
         self.steps = []
         step = 1
         heap = []
-        visited = set()
+        closed = set()
+        best_g = {}
         counter = 0
         
-        start_h = self.count_inversions(start)
+        start_h = self.tile_manhattan_distance(start)
         start_g = 0
         start_f = start_g + start_h
         start_node = Node(start, depth=0)
         heapq.heappush(heap, (start_f, counter, state_to_string(start), start_node))
-        visited.add(state_to_string(start))
+        best_g[state_to_string(start)] = 0
         
         self.steps.append({
             "step": step,
@@ -700,9 +705,13 @@ class StepBasedSolver:
         
         while heap:
             _, _, _, node = heapq.heappop(heap)
+            node_key = state_to_string(node.state)
+            if node_key in closed:
+                continue
+            closed.add(node_key)
             
             g_n = node.depth
-            h_n = self.count_inversions(node.state)
+            h_n = self.tile_manhattan_distance(node.state)
             f_n = g_n + h_n
             
             self.steps.append({
@@ -737,12 +746,12 @@ class StepBasedSolver:
                 child_state = execute_action(node.state, action)
                 child_key = state_to_string(child_state)
                 
-                if child_key not in visited:
-                    visited.add(child_key)
+                child_g = node.depth + 1
+                if child_key not in closed and child_g < best_g.get(child_key, float("inf")):
+                    best_g[child_key] = child_g
                     child = Node(child_state, parent=node, action=action, depth=node.depth + 1)
                     children.append(child)
-                    child_g = child.depth
-                    child_h = self.count_inversions(child_state)
+                    child_h = self.tile_manhattan_distance(child_state)
                     child_f = child_g + child_h
                     counter += 1
                     heapq.heappush(heap, (child_f, counter, child_key, child))
@@ -760,47 +769,42 @@ class StepBasedSolver:
             step += 1
 
     def heuristic_ida_star(self, state):
-        for i in range(3):
-            for j in range(3):
-                if state[i][j] == '.':
-                    return abs(i - 2) + abs(j - 2)
-        return 0
+        return self.tile_manhattan_distance(state)
 
     def search_with_limit_ida(self, node, g_limit, visited):
-        stack = [node]
-        min_limit = float('inf')
-        local_visited = set()
-        local_visited.add(state_to_string(node.state))
-        
-        while stack:
-            current = stack.pop()
+        def dfs(current, path_keys):
             h_val = self.heuristic_ida_star(current.state)
             f_val = current.depth + h_val
-            
+
             if f_val > g_limit:
-                if f_val < min_limit:
-                    min_limit = f_val
-                continue
-            
+                return None, f_val
+
             if is_goal(current.state):
-                return current, g_limit
-            
+                return current, f_val
+
+            min_next_limit = float("inf")
             for action in get_actions(current.state):
                 child_state = execute_action(current.state, action)
                 child_key = state_to_string(child_state)
-                
-                if child_key not in local_visited:
-                    local_visited.add(child_key)
-                    child = Node(child_state, parent=current, action=action, depth=current.depth + 1)
-                    stack.append(child)
-        
-        return None, min_limit
+                if child_key in path_keys:
+                    continue
+
+                child = Node(child_state, parent=current, action=action, depth=current.depth + 1)
+                result, next_limit = dfs(child, path_keys | {child_key})
+                if result is not None:
+                    return result, next_limit
+                min_next_limit = min(min_next_limit, next_limit)
+
+            return None, min_next_limit
+
+        return dfs(node, {state_to_string(node.state)})
 
     def generate_steps_ida_star(self, start):
         self.steps = []
         step = 1
+        limit = self.heuristic_ida_star(start)
         
-        for limit in range(50):
+        while limit < 80:
             start_node = Node(start, depth=0)
             visited = set()
             visited.add(state_to_string(start))
@@ -837,7 +841,6 @@ class StepBasedSolver:
             if new_threshold == float('inf'):
                 return
             
-            step += 1
             self.steps.append({
                 "step": step,
                 "node": None,
@@ -849,12 +852,13 @@ class StepBasedSolver:
                 "depth": "-"
             })
             step += 1
+            limit = new_threshold
 
     def generate_steps_hill_climbing(self, start):
         self.steps = []
         step = 1
         current = start
-        current_value = self.manhattan_distance(current)
+        current_value = self.tile_manhattan_distance(current)
         current_node = Node(current, depth=0)
         iterations = 0
         
@@ -896,7 +900,7 @@ class StepBasedSolver:
             
             for action in rules:
                 neighbor = execute_action(current, action)
-                value = self.manhattan_distance(neighbor)
+                value = self.tile_manhattan_distance(neighbor)
                 neighbor_node = Node(neighbor, parent=current_node, action=action, depth=current_node.depth + 1)
                 neighbors.append((neighbor_node, value))
                 
@@ -968,6 +972,7 @@ class StepBasedSolver:
 
         while iterations < 1000:
             if is_goal(current):
+                self.solution = get_solution(current_node)
                 self.steps.append({
                     "step": step,
                     "node": current_node,
@@ -976,7 +981,8 @@ class StepBasedSolver:
                     "action": "GOAL",
                     "message": "Tim thay goal!",
                     "heuristic": current_h,
-                    "depth": current_node.depth
+                    "depth": current_node.depth,
+                    "solution": self.solution
                 })
                 return
 
@@ -1057,6 +1063,7 @@ class StepBasedSolver:
 
         while iterations < 1000:
             if is_goal(current):
+                self.solution = get_solution(current_node)
                 self.steps.append({
                     "step": step,
                     "node": current_node,
@@ -1065,7 +1072,8 @@ class StepBasedSolver:
                     "action": "GOAL",
                     "message": "Tim thay goal!",
                     "heuristic": current_h,
-                    "depth": current_node.depth
+                    "depth": current_node.depth,
+                    "solution": self.solution
                 })
                 return
 
@@ -1181,6 +1189,7 @@ class StepBasedSolver:
             step += 1
 
             if is_goal(current):
+                self.solution = get_solution(current_node)
                 self.steps.append({
                     "step": step,
                     "node": current_node,
@@ -1189,7 +1198,8 @@ class StepBasedSolver:
                     "action": "GOAL",
                     "message": "Tim thay goal!",
                     "heuristic": current_h,
-                    "depth": current_node.depth
+                    "depth": current_node.depth,
+                    "solution": self.solution
                 })
                 step += 1
                 break
@@ -1255,6 +1265,18 @@ class StepBasedSolver:
             step += 1
 
             if is_goal(result_node.state):
+                self.solution = get_solution(result_node)
+                self.steps.append({
+                    "step": step,
+                    "node": result_node,
+                    "state": result_node.state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tim thay goal o restart #{restart + 1}",
+                    "heuristic": 0,
+                    "depth": result_node.depth,
+                    "solution": self.solution
+                })
                 return
 
         self.steps.append({
@@ -1292,6 +1314,7 @@ class StepBasedSolver:
         for iteration in range(max_iterations):
             for node in beam:
                 if is_goal(node.state):
+                    self.solution = get_solution(node)
                     self.steps.append({
                         "step": step,
                         "node": node,
@@ -1300,7 +1323,8 @@ class StepBasedSolver:
                         "action": "GOAL",
                         "message": "Tim thay goal!",
                         "heuristic": 0,
-                        "depth": node.depth
+                        "depth": node.depth,
+                        "solution": self.solution
                     })
                     return
 
@@ -1406,6 +1430,7 @@ class StepBasedSolver:
 
         for iteration in range(1, max_iterations + 1):
             if is_goal(current):
+                self.solution = get_solution(current_node)
                 self.steps.append({
                     "step": step,
                     "node": current_node,
@@ -1414,7 +1439,8 @@ class StepBasedSolver:
                     "action": "GOAL",
                     "message": "Tim thay goal!",
                     "heuristic": current_h,
-                    "depth": current_node.depth
+                    "depth": current_node.depth,
+                    "solution": self.solution
                 })
                 return
 
@@ -1521,7 +1547,8 @@ class StepBasedSolver:
                     "action": "GOAL",
                     "message": f"Ca 3 trang thai deu ve goal. Path={actions_taken}",
                     "heuristic": 0,
-                    "depth": len(actions_taken)
+                    "depth": len(actions_taken),
+                    "solution": actions_taken
                 })
                 return
 
@@ -1609,7 +1636,8 @@ class StepBasedSolver:
         start, plan = self.random_belief_state_with_plan(size=3)
         stack = [(start, [])]
         explored = set()
-        max_steps = len(plan) + 1
+        max_depth = 20
+        max_nodes = 4000
 
         self.steps.append({
             "step": step,
@@ -1618,13 +1646,13 @@ class StepBasedSolver:
             "belief": start,
             "frontier": [{"belief": start, "cost": self.belief_cost(start), "path": []}],
             "action": "START",
-            "message": f"Bat dau Belief State BS-BG DFS. Plan random={plan}",
+            "message": f"Bat dau Belief State BS-BG DFS. Hint tao state chi de tham khao={plan}",
             "heuristic": self.belief_cost(start),
             "depth": "-"
         })
         step += 1
 
-        while stack and step <= max_steps + 1:
+        while stack and len(explored) < max_nodes:
             belief_state, actions_taken = stack.pop()
             belief_key = self.belief_to_string(belief_state)
             if belief_key in explored:
@@ -1659,11 +1687,16 @@ class StepBasedSolver:
                 })
                 return
 
-            if len(actions_taken) < len(plan):
-                action = plan[len(actions_taken)]
-                next_belief = self.execute_belief_action(belief_state, action)
-                if self.belief_to_string(next_belief) not in explored:
-                    stack.append((next_belief, actions_taken + [action]))
+            if len(actions_taken) < max_depth:
+                actions = sorted(
+                    self.all_actions(),
+                    key=lambda action: self.belief_cost(self.execute_belief_action(belief_state, action))
+                )
+                for action in reversed(actions):
+                    next_belief = self.execute_belief_action(belief_state, action)
+                    next_key = self.belief_to_string(next_belief)
+                    if next_key not in explored:
+                        stack.append((next_belief, actions_taken + [action]))
 
         self.steps.append({
             "step": step,
@@ -1790,65 +1823,502 @@ class StepBasedSolver:
     def generate_steps_and_or_graph_search(self):
         self.steps = []
         step = 1
-        current, plan = self.random_and_or_initial_state()
-        path = []
+        start, plan = self.random_and_or_initial_state()
+        max_depth = 15
+        path_states = set()
 
         self.steps.append({
             "step": step,
-            "node": Node(current, depth=0),
-            "state": current,
+            "node": Node(start, depth=0),
+            "state": start,
             "frontier": [],
             "action": "START",
-            "message": f"Bat dau AND-OR Graph Search. Plan random={plan}",
-            "heuristic": self.tile_manhattan_distance(current),
+            "message": f"Bat dau AND-OR Graph Search. Hint tao state chi de tham khao={plan}",
+            "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })
         step += 1
 
-        for depth, action in enumerate(plan):
-            state_key = state_to_string(current)
+        def or_search(state, depth, path_actions):
+            nonlocal step
+            state_key = state_to_string(state)
             self.steps.append({
                 "step": step,
-                "node": Node(current, depth=depth),
-                "state": current,
+                "node": Node(state, depth=depth),
+                "state": state,
                 "frontier": [],
                 "action": "OR_SEARCH",
                 "message": f"OR_SEARCH depth={depth}: state={state_key}",
-                "heuristic": self.tile_manhattan_distance(current),
+                "heuristic": self.tile_manhattan_distance(state),
                 "depth": depth
             })
             step += 1
 
-            if is_goal(current):
-                break
+            if is_goal(state):
+                return path_actions, state
+            if depth >= max_depth or state_key in path_states:
+                return None, state
 
-            result = self.execute_action_with_wall(current, action)
-            path.append(action)
-            self.steps.append({
-                "step": step,
-                "node": Node(result, depth=depth + 1),
-                "state": result,
-                "frontier": [{"state": result, "action": action}],
-                "action": "AND_SEARCH",
-                "message": f"AND_SEARCH: action={action}, result_states=1",
-                "heuristic": self.tile_manhattan_distance(result),
-                "depth": depth + 1
-            })
-            step += 1
-            current = result
+            path_states.add(state_key)
+            actions = sorted(
+                get_actions(state),
+                key=lambda action: self.tile_manhattan_distance(execute_action(state, action))
+            )
 
-        final_action = "GOAL" if is_goal(current) else "FAILED"
-        final_message = f"Tim thay goal. Plan={path}" if is_goal(current) else "AND-OR khong tim thay goal"
+            for action in actions:
+                result = execute_action(state, action)
+                self.steps.append({
+                    "step": step,
+                    "node": Node(result, depth=depth + 1),
+                    "state": result,
+                    "frontier": [{"state": result, "action": action}],
+                    "action": "AND_SEARCH",
+                    "message": f"AND_SEARCH: action={action}, result_states=1",
+                    "heuristic": self.tile_manhattan_distance(result),
+                    "depth": depth + 1
+                })
+                step += 1
+
+                result_path, result_state = or_search(result, depth + 1, path_actions + [action])
+                if result_path is not None:
+                    return result_path, result_state
+
+            path_states.remove(state_key)
+            return None, state
+
+        path, final_state = or_search(start, 0, [])
+        final_action = "GOAL" if path is not None and is_goal(final_state) else "FAILED"
+        final_message = f"Tim thay goal. Plan={path}" if final_action == "GOAL" else "AND-OR khong tim thay goal"
         self.steps.append({
             "step": step,
-            "node": Node(current, depth=len(path)),
-            "state": current,
+            "node": Node(final_state, depth=len(path) if path else 0),
+            "state": final_state,
             "frontier": [],
             "action": final_action,
             "message": final_message,
-            "heuristic": self.tile_manhattan_distance(current),
-            "depth": len(path),
-            "solution": path
+            "heuristic": self.tile_manhattan_distance(final_state),
+            "depth": len(path) if path else "-",
+            "solution": path if path else []
+        })
+
+    def random_state_with_hint(self, depth=10):
+        state = copy.deepcopy(GOAL_STATE)
+        scramble = []
+        previous_action = None
+
+        for _ in range(depth):
+            actions = get_actions(state)
+            if previous_action:
+                reverse = self.opposite_action(previous_action)
+                filtered = [action for action in actions if action != reverse]
+                if filtered:
+                    actions = filtered
+
+            action = random.choice(actions)
+            state = execute_action(state, action)
+            scramble.append(action)
+            previous_action = action
+
+        hint = [self.opposite_action(action) for action in reversed(scramble)]
+        return state, hint
+
+    def prioritized_actions(self, state, path, hint=None):
+        actions = get_actions(state)
+        if path:
+            reverse = self.opposite_action(path[-1])
+            actions = [action for action in actions if action != reverse]
+
+        return sorted(actions, key=lambda action: self.tile_manhattan_distance(execute_action(state, action)))
+
+    def generate_steps_backtracking_csp(self):
+        self.steps = []
+        step = 1
+        start, hint = self.random_state_with_hint(depth=10)
+        stack = [(start, [], {state_to_string(start)})]
+        limit = 20
+
+        self.steps.append({
+            "step": step,
+            "node": Node(start, depth=0),
+            "state": start,
+            "frontier": [Node(start, depth=0)],
+            "action": "START",
+            "message": f"Bat dau Backtracking Search. Hint tao state chi de tham khao={hint}",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        while stack:
+            state, path, visited = stack.pop()
+            node = Node(state, action=path[-1] if path else None, depth=len(path))
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": [Node(item[0], depth=len(item[1])) for item in stack[-8:]],
+                "action": "POP",
+                "message": f"Xet node depth={len(path)}, h(n)={self.tile_manhattan_distance(state)}, path={path if path else 'START'}",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": len(path)
+            })
+            step += 1
+
+            if is_goal(state):
+                self.steps.append({
+                    "step": step,
+                    "node": node,
+                    "state": state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tim thay goal. Path={path}",
+                    "heuristic": 0,
+                    "depth": len(path),
+                    "solution": path
+                })
+                return
+
+            if len(path) >= limit:
+                continue
+
+            children = []
+            for action in reversed(self.prioritized_actions(state, path)):
+                next_state = execute_action(state, action)
+                key = state_to_string(next_state)
+                if key in visited:
+                    continue
+                children.append(Node(next_state, action=action, depth=len(path) + 1))
+                stack.append((next_state, path + [action], visited | {key}))
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": children,
+                "action": "EXPAND",
+                "message": f"Thu cac phep gan hop le, sinh {len(children)} node con",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": len(path)
+            })
+            step += 1
+
+    def generate_steps_forward_checking_csp(self):
+        self.steps = []
+        step = 1
+        start, hint = self.random_state_with_hint(depth=10)
+        stack = [(start, [], {state_to_string(start)})]
+        limit = 20
+
+        self.steps.append({
+            "step": step,
+            "node": Node(start, depth=0),
+            "state": start,
+            "frontier": [Node(start, depth=0)],
+            "action": "START",
+            "message": f"Bat dau Forward Checking. Hint tao state chi de tham khao={hint}",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        while stack:
+            state, path, visited = stack.pop()
+            node = Node(state, action=path[-1] if path else None, depth=len(path))
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": [Node(item[0], depth=len(item[1])) for item in stack[-8:]],
+                "action": "POP",
+                "message": f"Xet node depth={len(path)}, h(n)={self.tile_manhattan_distance(state)}",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": len(path)
+            })
+            step += 1
+
+            if is_goal(state):
+                self.steps.append({
+                    "step": step,
+                    "node": node,
+                    "state": state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tim thay goal. Path={path}",
+                    "heuristic": 0,
+                    "depth": len(path),
+                    "solution": path
+                })
+                return
+
+            if len(path) >= limit:
+                continue
+
+            candidates = []
+            for action in self.prioritized_actions(state, path):
+                next_state = execute_action(state, action)
+                key = state_to_string(next_state)
+                if key in visited:
+                    continue
+
+                next_domain = [
+                    next_action
+                    for next_action in get_actions(next_state)
+                    if not path or next_action != self.opposite_action(action)
+                ]
+                if not next_domain and not is_goal(next_state):
+                    continue
+
+                candidates.append((action, next_state, key, next_domain))
+
+            for action, next_state, key, _ in reversed(candidates):
+                stack.append((next_state, path + [action], visited | {key}))
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": [(Node(item[1], action=item[0], depth=len(path) + 1), len(item[3])) for item in candidates],
+                "action": "FORWARD_CHECK",
+                "message": f"Kiem tra mien buoc ke, giu {len(candidates)} action hop le",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": len(path)
+            })
+            step += 1
+
+    def ac3_action_domains(self, domains):
+        queue = deque((index, index + 1) for index in range(len(domains) - 1))
+        while queue:
+            xi, xj = queue.popleft()
+            revised = False
+            for action in domains[xi][:]:
+                supported = any(self.opposite_action(action) != other for other in domains[xj])
+                if not supported:
+                    domains[xi].remove(action)
+                    revised = True
+            if revised:
+                if not domains[xi]:
+                    return False
+                if xi > 0:
+                    queue.append((xi - 1, xi))
+        return True
+
+    def generate_steps_arc_consistency_csp(self):
+        self.steps = []
+        step = 1
+        start, hint = self.random_state_with_hint(depth=10)
+        limit = 20
+        base_domains = {index: self.all_actions()[:] for index in range(limit)}
+        self.ac3_action_domains(base_domains)
+        stack = [(start, [], {state_to_string(start)}, base_domains)]
+
+        self.steps.append({
+            "step": step,
+            "node": Node(start, depth=0),
+            "state": start,
+            "frontier": [Node(start, depth=0)],
+            "action": "START",
+            "message": f"Bat dau Arc Consistency AC-3. Hint tao state chi de tham khao={hint}",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        while stack:
+            state, path, visited, domains = stack.pop()
+            depth = len(path)
+            node = Node(state, action=path[-1] if path else None, depth=depth)
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": [Node(item[0], depth=len(item[1])) for item in stack[-8:]],
+                "action": "POP",
+                "message": f"Xet X{depth}, domain={domains.get(depth, [])}, h(n)={self.tile_manhattan_distance(state)}",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": depth
+            })
+            step += 1
+
+            if is_goal(state):
+                self.steps.append({
+                    "step": step,
+                    "node": node,
+                    "state": state,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tim thay goal. Path={path}",
+                    "heuristic": 0,
+                    "depth": depth,
+                    "solution": path
+                })
+                return
+
+            if depth >= limit:
+                continue
+
+            domain = [action for action in self.prioritized_actions(state, path) if action in domains[depth]]
+            candidates = []
+            for action in domain:
+                next_state = execute_action(state, action)
+                key = state_to_string(next_state)
+                if key in visited:
+                    continue
+
+                next_domains = {index: values[:] for index, values in domains.items()}
+                next_domains[depth] = [action]
+                if depth + 1 < limit and self.opposite_action(action) in next_domains[depth + 1]:
+                    next_domains[depth + 1].remove(self.opposite_action(action))
+                if not self.ac3_action_domains(next_domains):
+                    continue
+
+                candidates.append((action, next_state, key, next_domains))
+
+            for action, next_state, key, next_domains in reversed(candidates):
+                stack.append((next_state, path + [action], visited | {key}, next_domains))
+
+            self.steps.append({
+                "step": step,
+                "node": node,
+                "state": state,
+                "frontier": [Node(item[1], action=item[0], depth=depth + 1) for item in candidates],
+                "action": "AC3",
+                "message": f"Gan action va chay AC-3, con {len(candidates)} nhanh hop le",
+                "heuristic": self.tile_manhattan_distance(state),
+                "depth": depth
+            })
+            step += 1
+
+    def score_action_plan(self, start, plan):
+        state = copy.deepcopy(start)
+        invalid = 0
+        for index, action in enumerate(plan):
+            if action not in get_actions(state):
+                invalid += 5
+                continue
+            if index > 0 and action == self.opposite_action(plan[index - 1]):
+                invalid += 1
+            state = execute_action(state, action)
+        return self.tile_manhattan_distance(state) + invalid, state
+
+    def generate_steps_min_conflicts_csp(self):
+        self.steps = []
+        step = 1
+        start, hint = self.random_state_with_hint(depth=10)
+        plan_length = 20
+        max_steps = 120
+        max_restarts = 6
+        best_plan = None
+        best_state = start
+        best_score = float("inf")
+
+        self.steps.append({
+            "step": step,
+            "node": Node(start, depth=0),
+            "state": start,
+            "frontier": [],
+            "action": "START",
+            "message": f"Bat dau Min-Conflicts. Trang thai duoc tao tu xao tron, hint tham khao={hint}",
+            "heuristic": self.tile_manhattan_distance(start),
+            "depth": "-"
+        })
+        step += 1
+
+        for restart in range(1, max_restarts + 1):
+            plan = [random.choice(self.all_actions()) for _ in range(plan_length)]
+            self.steps.append({
+                "step": step,
+                "node": Node(start, depth=0),
+                "state": start,
+                "frontier": [],
+                "action": "RESTART",
+                "message": f"Khoi dong lai #{restart}, plan ngau nhien={plan}",
+                "heuristic": self.tile_manhattan_distance(start),
+                "depth": "-"
+            })
+            step += 1
+
+            for iteration in range(1, max_steps + 1):
+                score, current_state = self.score_action_plan(start, plan)
+                if score < best_score:
+                    best_score = score
+                    best_plan = plan[:]
+                    best_state = current_state
+
+                self.steps.append({
+                    "step": step,
+                    "node": Node(current_state, depth=len(plan)),
+                    "state": current_state,
+                    "frontier": [],
+                    "action": "EVALUATE",
+                    "message": f"Restart {restart}, lap {iteration}: diem={score}, h(n)={self.tile_manhattan_distance(current_state)}",
+                    "heuristic": self.tile_manhattan_distance(current_state),
+                    "depth": iteration
+                })
+                step += 1
+
+                if is_goal(current_state):
+                    self.steps.append({
+                        "step": step,
+                        "node": Node(current_state, depth=len(plan)),
+                        "state": current_state,
+                        "frontier": [],
+                        "action": "GOAL",
+                        "message": f"Plan dat goal. Path={plan}",
+                        "heuristic": 0,
+                        "depth": iteration,
+                        "solution": plan
+                    })
+                    return
+
+                current_score = score
+                conflict_indexes = []
+                for index in range(len(plan)):
+                    scores = []
+                    for action in self.all_actions():
+                        candidate_plan = plan[:]
+                        candidate_plan[index] = action
+                        candidate_score, _ = self.score_action_plan(start, candidate_plan)
+                        scores.append(candidate_score)
+                    if min(scores) < current_score:
+                        conflict_indexes.append(index)
+
+                index = random.choice(conflict_indexes) if conflict_indexes else random.randrange(len(plan))
+                candidates = []
+                for action in self.all_actions():
+                    candidate_plan = plan[:]
+                    candidate_plan[index] = action
+                    candidate_score, candidate_state = self.score_action_plan(start, candidate_plan)
+                    candidates.append((candidate_score, action, candidate_state))
+
+                candidates.sort(key=lambda item: item[0])
+                min_score = candidates[0][0]
+                best = random.choice([item for item in candidates if item[0] == min_score])
+                plan[index] = best[1]
+
+                self.steps.append({
+                    "step": step,
+                    "node": Node(best[2], depth=len(plan)),
+                    "state": best[2],
+                    "frontier": [(Node(item[2], action=item[1], depth=len(plan)), item[0]) for item in candidates],
+                    "action": "MIN_CONFLICT",
+                    "message": f"Doi bien X{index} thanh {best[1]}, diem tot nhat={min_score}",
+                    "heuristic": self.tile_manhattan_distance(best[2]),
+                    "depth": iteration
+                })
+                step += 1
+
+        self.steps.append({
+            "step": step,
+            "node": Node(best_state, depth=len(best_plan) if best_plan else 0),
+            "state": best_state,
+            "frontier": [],
+            "action": "BEST",
+            "message": f"Chua tim thay goal, plan tot nhat co diem={best_score}: {best_plan}",
+            "heuristic": self.tile_manhattan_distance(best_state),
+            "depth": "-"
         })
 
 class PuzzleApp(ctk.CTk):
@@ -1877,7 +2347,10 @@ class PuzzleApp(ctk.CTk):
             "Local Beam", "Local Beam + HC", "Simulated Annealing",
             "--- Belief / Nondeterministic ---",
             "Belief State Greedy", "Belief State (BS-BG DFS)",
-            "Nondeterministic Heuristic", "AND-OR Graph Search"
+            "Nondeterministic Heuristic", "AND-OR Graph Search",
+            "--- CSP / Constraint Search ---",
+            "Backtracking Search", "Forward Checking",
+            "Arc Consistency", "Min-Conflicts"
         ]
 
         self.build_ui()
@@ -2046,6 +2519,14 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_nondeterministic_heuristic()
         elif self.algorithm == "AND-OR Graph Search":
             self.solver.generate_steps_and_or_graph_search()
+        elif self.algorithm == "Backtracking Search":
+            self.solver.generate_steps_backtracking_csp()
+        elif self.algorithm == "Forward Checking":
+            self.solver.generate_steps_forward_checking_csp()
+        elif self.algorithm == "Arc Consistency":
+            self.solver.generate_steps_arc_consistency_csp()
+        elif self.algorithm == "Min-Conflicts":
+            self.solver.generate_steps_min_conflicts_csp()
         
         if self.solver.steps:
             self.log_message(f"Đã tạo {len(self.solver.steps)} bước cho {self.algorithm}")
