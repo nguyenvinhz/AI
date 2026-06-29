@@ -98,7 +98,6 @@ def is_goal(state):
 def random_initial_state(depth=10):
     state = copy.deepcopy(goal)
     previous_action = None
-    scramble = []
 
     for _ in range(depth):
         actions = find_action(state)
@@ -109,11 +108,8 @@ def random_initial_state(depth=10):
                 actions = filtered
         action = random.choice(actions)
         state = execute_action(state, action)
-        scramble.append(action)
         previous_action = action
-
-    solution_hint = [opposite[action] for action in reversed(scramble)]
-    return state, solution_hint
+    return state
 
 
 def print_result(solution, final_state):
@@ -169,10 +165,9 @@ def backtracking_search(state, limit, path=None, visited=None, depth=0):
 
 if __name__ == "__main__":
     print("TÌM KIẾM QUAY LUI - 8 PUZZLE")
-    start, hint = random_initial_state(depth=10)
+    start = random_initial_state(depth=10)
     print("Trạng thái ban đầu:")
     print_table(start)
-    print("Gợi ý nghiệm từ bước xáo trộn:", hint)
 
     solution, final_state = backtracking_search(start, limit=20)
     print_result(solution, final_state)

@@ -1607,7 +1607,7 @@ class StepBasedSolver:
 
         return current, trace
 
-    def random_belief_state_with_plan(self, size=3, plan_length=7, max_attempts=1000):
+    def random_belief_state(self, size=3, plan_length=7, max_attempts=1000):
         for _ in range(max_attempts):
             plan = self.random_plan(plan_length)
             belief_state = []
@@ -1626,14 +1626,14 @@ class StepBasedSolver:
             if len(belief_state) == size:
                 final_belief, trace = self.run_belief_plan(belief_state, plan)
                 if self.is_belief_goal(final_belief) and len(trace) == len(set(trace)):
-                    return belief_state, plan
+                    return belief_state
 
-        return self.random_belief_state_with_plan(size, max(3, plan_length - 1), max_attempts)
+        return self.random_belief_state(size, max(3, plan_length - 1), max_attempts)
 
     def generate_steps_belief_bs_bg_dfs(self):
         self.steps = []
         step = 1
-        start, plan = self.random_belief_state_with_plan(size=3)
+        start = self.random_belief_state(size=3)
         stack = [(start, [])]
         explored = set()
         max_depth = 20
@@ -1646,7 +1646,7 @@ class StepBasedSolver:
             "belief": start,
             "frontier": [{"belief": start, "cost": self.belief_cost(start), "path": []}],
             "action": "START",
-            "message": f"Bat dau Belief State BS-BG DFS. Hint tao state chi de tham khao={plan}",
+            "message": "Bat dau Belief State BS-BG DFS",
             "heuristic": self.belief_cost(start),
             "depth": "-"
         })
@@ -1728,7 +1728,7 @@ class StepBasedSolver:
             "belief": start,
             "frontier": [{"belief": start, "cost": start_cost, "path": []}],
             "action": "START",
-            "message": f"Bat dau tim kiem khong xac dinh co goi y, h(n)={start_cost}",
+            "message": f"Bat dau tim kiem khong xac dinh theo heuristic, h(n)={start_cost}",
             "heuristic": start_cost,
             "depth": "-"
         })
@@ -1816,14 +1816,12 @@ class StepBasedSolver:
             state = execute_action(state, action)
             scramble_actions.append(action)
             previous_action = action
-
-        solution_plan = [self.opposite_action(action) for action in reversed(scramble_actions)]
-        return state, solution_plan
+        return state
 
     def generate_steps_and_or_graph_search(self):
         self.steps = []
         step = 1
-        start, plan = self.random_and_or_initial_state()
+        start = self.random_and_or_initial_state()
         max_depth = 15
         path_states = set()
 
@@ -1833,7 +1831,7 @@ class StepBasedSolver:
             "state": start,
             "frontier": [],
             "action": "START",
-            "message": f"Bat dau AND-OR Graph Search. Hint tao state chi de tham khao={plan}",
+            "message": "Bat dau AND-OR Graph Search",
             "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })
@@ -1901,9 +1899,8 @@ class StepBasedSolver:
             "solution": path if path else []
         })
 
-    def random_state_with_hint(self, depth=10):
+    def random_initial_state(self, depth=10):
         state = copy.deepcopy(GOAL_STATE)
-        scramble = []
         previous_action = None
 
         for _ in range(depth):
@@ -1916,13 +1913,10 @@ class StepBasedSolver:
 
             action = random.choice(actions)
             state = execute_action(state, action)
-            scramble.append(action)
             previous_action = action
+        return state
 
-        hint = [self.opposite_action(action) for action in reversed(scramble)]
-        return state, hint
-
-    def prioritized_actions(self, state, path, hint=None):
+    def prioritized_actions(self, state, path):
         actions = get_actions(state)
         if path:
             reverse = self.opposite_action(path[-1])
@@ -1933,7 +1927,7 @@ class StepBasedSolver:
     def generate_steps_backtracking_csp(self):
         self.steps = []
         step = 1
-        start, hint = self.random_state_with_hint(depth=10)
+        start = self.random_initial_state(depth=10)
         stack = [(start, [], {state_to_string(start)})]
         limit = 20
 
@@ -1943,7 +1937,7 @@ class StepBasedSolver:
             "state": start,
             "frontier": [Node(start, depth=0)],
             "action": "START",
-            "message": f"Bat dau Backtracking Search. Hint tao state chi de tham khao={hint}",
+            "message": "Bat dau Backtracking Search",
             "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })
@@ -2006,7 +2000,7 @@ class StepBasedSolver:
     def generate_steps_forward_checking_csp(self):
         self.steps = []
         step = 1
-        start, hint = self.random_state_with_hint(depth=10)
+        start = self.random_initial_state(depth=10)
         stack = [(start, [], {state_to_string(start)})]
         limit = 20
 
@@ -2016,7 +2010,7 @@ class StepBasedSolver:
             "state": start,
             "frontier": [Node(start, depth=0)],
             "action": "START",
-            "message": f"Bat dau Forward Checking. Hint tao state chi de tham khao={hint}",
+            "message": "Bat dau Forward Checking",
             "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })
@@ -2107,7 +2101,7 @@ class StepBasedSolver:
     def generate_steps_arc_consistency_csp(self):
         self.steps = []
         step = 1
-        start, hint = self.random_state_with_hint(depth=10)
+        start = self.random_initial_state(depth=10)
         limit = 20
         base_domains = {index: self.all_actions()[:] for index in range(limit)}
         self.ac3_action_domains(base_domains)
@@ -2119,7 +2113,7 @@ class StepBasedSolver:
             "state": start,
             "frontier": [Node(start, depth=0)],
             "action": "START",
-            "message": f"Bat dau Arc Consistency AC-3. Hint tao state chi de tham khao={hint}",
+            "message": "Bat dau Arc Consistency AC-3",
             "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })
@@ -2206,7 +2200,7 @@ class StepBasedSolver:
     def generate_steps_min_conflicts_csp(self):
         self.steps = []
         step = 1
-        start, hint = self.random_state_with_hint(depth=10)
+        start = self.random_initial_state(depth=10)
         plan_length = 20
         max_steps = 120
         max_restarts = 6
@@ -2220,7 +2214,7 @@ class StepBasedSolver:
             "state": start,
             "frontier": [],
             "action": "START",
-            "message": f"Bat dau Min-Conflicts. Trang thai duoc tao tu xao tron, hint tham khao={hint}",
+            "message": "Bat dau Min-Conflicts. Trang thai duoc tao tu xao tron",
             "heuristic": self.tile_manhattan_distance(start),
             "depth": "-"
         })

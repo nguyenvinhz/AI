@@ -109,8 +109,7 @@ def random_initial_state(plan_length=5):
         scramble_actions.append(action)
         previous_action = action
 
-    solution_plan = [opposite_action(action) for action in reversed(scramble_actions)]
-    return state, solution_plan
+    return state
 
 
 def make_state_from_plan(plan):
@@ -150,19 +149,11 @@ def goal_test(state):
     return state == goal
 
 
-def priority_actions(depth, plan):
-    if plan and depth < len(plan):
-        action = plan[depth]
-        return [action] + [item for item in all_actions() if item != action]
-    return all_actions()
+def and_or_graph_search(initial_state, max_depth=20):
+    return or_search(initial_state, [], 0, max_depth)
 
 
-def and_or_graph_search(initial_state, solution_plan=None):
-    max_depth = len(solution_plan) + 2 if solution_plan else 20
-    return or_search(initial_state, [], solution_plan, 0, max_depth)
-
-
-def or_search(state, path, solution_plan=None, depth=0, max_depth=20):
+def or_search(state, path, depth=0, max_depth=20):
     state_key = state_to_string(state)
     print(f"OR_SEARCH depth={depth}: {state_key}")
     print_table(state)
@@ -173,12 +164,12 @@ def or_search(state, path, solution_plan=None, depth=0, max_depth=20):
     if state_key in path or depth > max_depth:
         return "failure"
 
-    for action in priority_actions(depth, solution_plan):
+    for action in all_actions():
         if action not in find_action(state):
             continue
 
         states = result_states(state, action)
-        plan = and_search(states, path + [state_key], solution_plan, depth + 1, max_depth)
+        plan = and_search(states, path + [state_key], depth + 1, max_depth)
 
         if plan != "failure":
             return [action, plan]
@@ -186,12 +177,12 @@ def or_search(state, path, solution_plan=None, depth=0, max_depth=20):
     return "failure"
 
 
-def and_search(states, path, solution_plan=None, depth=0, max_depth=20):
+def and_search(states, path, depth=0, max_depth=20):
     plans = {}
     print(f"AND_SEARCH: {len(states)} state")
 
     for state in states:
-        plan = or_search(state, path, solution_plan, depth, max_depth)
+        plan = or_search(state, path, depth, max_depth)
         if plan == "failure":
             return "failure"
         plans[state_to_string(state)] = plan
@@ -200,8 +191,7 @@ def and_search(states, path, solution_plan=None, depth=0, max_depth=20):
 
 
 if __name__ == "__main__":
-    initial, solution_plan = random_initial_state()
-    print(f"Random plan: {solution_plan}")
-    plan = and_or_graph_search(initial, solution_plan)
+    initial = random_initial_state()
+    plan = and_or_graph_search(initial)
     print("PLAN:")
     print(plan)

@@ -99,7 +99,6 @@ def is_goal(state):
 def random_initial_state(depth=10):
     state = copy.deepcopy(goal)
     previous_action = None
-    scramble = []
     for _ in range(depth):
         actions = find_action(state)
         if previous_action:
@@ -109,9 +108,8 @@ def random_initial_state(depth=10):
                 actions = filtered
         action = random.choice(actions)
         state = execute_action(state, action)
-        scramble.append(action)
         previous_action = action
-    return state, [opposite[action] for action in reversed(scramble)]
+    return state
 
 
 def print_result(solution, final_state):
@@ -191,10 +189,9 @@ def forward_checking(state, limit, path=None, visited=None, depth=0):
 
 if __name__ == "__main__":
     print("KIỂM TRA TIẾN - 8 PUZZLE")
-    start, hint = random_initial_state(depth=10)
+    start = random_initial_state(depth=10)
     print("Trạng thái ban đầu:")
     print_table(start)
-    print("Gợi ý nghiệm từ bước xáo trộn:", hint)
 
     solution, final_state = forward_checking(start, limit=20)
     print_result(solution, final_state)

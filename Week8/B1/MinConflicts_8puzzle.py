@@ -98,7 +98,6 @@ def is_goal(state):
 def random_initial_state(depth=10):
     state = copy.deepcopy(goal)
     previous_action = None
-    scramble = []
     for _ in range(depth):
         actions = find_action(state)
         if previous_action:
@@ -108,9 +107,8 @@ def random_initial_state(depth=10):
                 actions = filtered
         action = random.choice(actions)
         state = execute_action(state, action)
-        scramble.append(action)
         previous_action = action
-    return state, [opposite[action] for action in reversed(scramble)]
+    return state
 
 
 def run_actions(state, actions):
@@ -151,13 +149,9 @@ def score_plan(start, plan):
     return manhattan_distance(state) + invalid, state
 
 
-def min_conflicts(start, length=PLAN_LENGTH, initial_plan=None):
+def min_conflicts(start, length=PLAN_LENGTH):
     for restart in range(1, MAX_RESTARTS + 1):
-        if restart == 1 and initial_plan is not None:
-            plan = initial_plan[:]
-            length = len(plan)
-        else:
-            plan = random_plan(length)
+        plan = random_plan(length)
 
         best_score, best_state = score_plan(start, plan)
         log(f"KHỞI ĐỘNG LẠI {restart}: điểm={best_score}, kế hoạch={plan}")
@@ -196,10 +190,9 @@ def min_conflicts(start, length=PLAN_LENGTH, initial_plan=None):
 
 if __name__ == "__main__":
     print("MIN-CONFLICTS - 8 PUZZLE")
-    start, hint = random_initial_state(depth=10)
+    start = random_initial_state(depth=10)
     print("Trạng thái ban đầu:")
     print_table(start)
-    print("Gợi ý nghiệm từ bước xáo trộn:", hint)
 
-    solution, final_state = min_conflicts(start, initial_plan=hint)
+    solution, final_state = min_conflicts(start)
     print_result(solution, final_state)

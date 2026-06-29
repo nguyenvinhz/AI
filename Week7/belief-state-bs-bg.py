@@ -180,21 +180,10 @@ def random_belief_state(size=3, plan_length=7):
         if len(belief_state) == size:
             final_belief, trace = run_belief_plan(belief_state, plan)
             if is_belief_goal(final_belief) and len(trace) == len(set(trace)):
-                return belief_state, plan
+                return belief_state
 
 
-def search_actions(path, plan):
-    if plan:
-        if len(path) < len(plan):
-            return [plan[len(path)]]
-        return []
-
-    return all_actions()
-
-
-def dfs_belief_state(initial_belief, solution_plan=None, max_steps=100):
-    if solution_plan:
-        max_steps = min(max_steps, len(solution_plan) + 1)
+def dfs_belief_state(initial_belief, max_steps=100):
 
     stack = [(initial_belief, [])]
     explored = set()
@@ -231,7 +220,7 @@ def dfs_belief_state(initial_belief, solution_plan=None, max_steps=100):
                 "final_belief": belief_state
             }
 
-        for action in reversed(search_actions(actions_taken, solution_plan)):
+        for action in reversed(all_actions()):
             next_belief = execute_belief_action(belief_state, action)
             next_key = belief_to_string(next_belief)
             if next_key not in explored:
@@ -246,6 +235,5 @@ def dfs_belief_state(initial_belief, solution_plan=None, max_steps=100):
 
 
 if __name__ == "__main__":
-    belief, plan = random_belief_state(size=3)
-    print(f"Random plan: {plan}")
-    dfs_belief_state(belief, solution_plan=plan)
+    belief = random_belief_state(size=3)
+    dfs_belief_state(belief)
