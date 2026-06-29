@@ -771,43 +771,78 @@ class StepBasedSolver:
     def heuristic_ida_star(self, state):
         return self.tile_manhattan_distance(state)
 
-    def search_with_limit_ida(self, node, g_limit, visited):
-        def dfs(current, path_keys):
+    def generate_steps_ida_star(self, start):
+        self.steps = []
+        self.solution = []
+        step = 1
+        limit = self.heuristic_ida_star(start)
+
+        def dfs(current, path_keys, g_limit):
+            nonlocal step
             h_val = self.heuristic_ida_star(current.state)
             f_val = current.depth + h_val
 
+            self.steps.append({
+                "step": step,
+                "node": current,
+                "state": current.state,
+                "frontier": [current],
+                "action": "POP",
+                "message": f"Xét trạng thái: f(n) = g(n) + h(n) = {current.depth} + {h_val} = {f_val} | Threshold = {g_limit}",
+                "threshold": g_limit,
+                "depth": current.depth
+            })
+            step += 1
+
             if f_val > g_limit:
+                self.steps.append({
+                    "step": step,
+                    "node": current,
+                    "state": current.state,
+                    "frontier": [],
+                    "action": "CUTOFF",
+                    "message": f"Vượt ngưỡng: f(n) = {f_val} > Threshold = {g_limit}. Quay lui!",
+                    "threshold": g_limit,
+                    "depth": current.depth
+                })
+                step += 1
                 return None, f_val
 
             if is_goal(current.state):
                 return current, f_val
 
             min_next_limit = float("inf")
+            children = []
             for action in get_actions(current.state):
                 child_state = execute_action(current.state, action)
                 child_key = state_to_string(child_state)
                 if child_key in path_keys:
                     continue
-
                 child = Node(child_state, parent=current, action=action, depth=current.depth + 1)
-                result, next_limit = dfs(child, path_keys | {child_key})
+                children.append(child)
+
+            self.steps.append({
+                "step": step,
+                "node": current,
+                "state": current.state,
+                "frontier": children,
+                "action": "EXPAND",
+                "message": f"Sinh {len(children)} node con | Threshold = {g_limit}",
+                "threshold": g_limit,
+                "depth": current.depth
+            })
+            step += 1
+
+            for child in children:
+                result, next_limit = dfs(child, path_keys | {state_to_string(child.state)}, g_limit)
                 if result is not None:
                     return result, next_limit
                 min_next_limit = min(min_next_limit, next_limit)
 
             return None, min_next_limit
 
-        return dfs(node, {state_to_string(node.state)})
-
-    def generate_steps_ida_star(self, start):
-        self.steps = []
-        step = 1
-        limit = self.heuristic_ida_star(start)
-        
         while limit < 80:
             start_node = Node(start, depth=0)
-            visited = set()
-            visited.add(state_to_string(start))
             
             self.steps.append({
                 "step": step,
@@ -815,13 +850,13 @@ class StepBasedSolver:
                 "state": start,
                 "frontier": [start_node],
                 "action": "START",
-                "message": f"IDA* - Threshold = {limit}",
+                "message": f"IDA* - Bắt đầu Threshold = {limit}",
                 "threshold": limit,
                 "depth": "-"
             })
             step += 1
             
-            result_node, new_threshold = self.search_with_limit_ida(start_node, limit, visited)
+            result_node, new_threshold = dfs(start_node, {state_to_string(start)}, limit)
             
             if result_node is not None:
                 self.solution = get_solution(result_node)
@@ -2315,6 +2350,446 @@ class StepBasedSolver:
             "depth": "-"
         })
 
+    def evaluate_state(self, state):
+        if state == GOAL_STATE:
+            return 100
+        return -self.tile_manhattan_distance(state)
+
+    def ordered_actions_local(self, state, previous_action=None):
+        actions = get_actions(state)
+        if previous_action:
+            opp = self.opposite_action(previous_action)
+            if opp in actions:
+                actions.remove(opp)
+        return sorted(actions, key=lambda action: self.tile_manhattan_distance(execute_action(state, action)))
+
+    def minimax_search(self, state, depth, maximizing_player, visited, previous_action=None):
+        if state == GOAL_STATE or depth == 0:
+            return self.evaluate_state(state)
+
+        actions = self.ordered_actions_local(state, previous_action)
+        if not actions:
+            return self.evaluate_state(state)
+
+        if maximizing_player:
+            best_value = -float("inf")
+            for action in actions:
+                next_state = execute_action(state, action)
+                key = state_to_string(next_state)
+                if key in visited:
+                    continue
+                visited.add(key)
+                value = self.minimax_search(next_state, depth - 1, False, visited, action)
+                visited.remove(key)
+                best_value = max(best_value, value)
+            return best_value if best_value != -float("inf") else self.evaluate_state(state)
+
+        best_value = float("inf")
+        for action in actions:
+            next_state = execute_action(state, action)
+            key = state_to_string(next_state)
+            if key in visited:
+                continue
+            visited.add(key)
+            value = self.minimax_search(next_state, depth - 1, True, visited, action)
+            visited.remove(key)
+            best_value = min(best_value, value)
+        return best_value if best_value != float("inf") else self.evaluate_state(state)
+
+    def alphabeta_search(self, state, depth, alpha, beta, visited, previous_action=None):
+        if state == GOAL_STATE or depth == 0:
+            return self.evaluate_state(state)
+
+        actions = self.ordered_actions_local(state, previous_action)
+        if not actions:
+            return self.evaluate_state(state)
+
+        best_value = -float("inf")
+        for action in actions:
+            next_state = execute_action(state, action)
+            key = state_to_string(next_state)
+            if key in visited:
+                continue
+            visited.add(key)
+            value = self.alphabeta_search(next_state, depth - 1, alpha, beta, visited, action)
+            visited.remove(key)
+            best_value = max(best_value, value)
+            alpha = max(alpha, best_value)
+            if beta <= alpha:
+                break
+        return best_value if best_value != -float("inf") else self.evaluate_state(state)
+
+    def expectimax_search(self, state, depth, maximizing_player, visited, previous_action=None):
+        if state == GOAL_STATE or depth == 0:
+            return self.evaluate_state(state)
+
+        actions = self.ordered_actions_local(state, previous_action)
+        if not actions:
+            return self.evaluate_state(state)
+
+        if maximizing_player:
+            best_value = -float("inf")
+            for action in actions:
+                next_state = execute_action(state, action)
+                key = state_to_string(next_state)
+                if key in visited:
+                    continue
+                visited.add(key)
+                value = self.expectimax_search(next_state, depth - 1, False, visited, action)
+                visited.remove(key)
+                best_value = max(best_value, value)
+            return best_value if best_value != -float("inf") else self.evaluate_state(state)
+
+        total = 0
+        count = 0
+        for action in actions:
+            next_state = execute_action(state, action)
+            key = state_to_string(next_state)
+            if key in visited:
+                continue
+            visited.add(key)
+            total += self.expectimax_search(next_state, depth - 1, True, visited, action)
+            visited.remove(key)
+            count += 1
+
+        return total / count if count > 0 else self.evaluate_state(state)
+
+    def generate_steps_minimax(self, start):
+        self.steps = []
+        self.solution = []
+        step = 1
+        current = copy.deepcopy(start)
+        path = []
+        previous_action = None
+        visited = {state_to_string(current)}
+        depth = 6
+        max_steps = 30
+
+        nodes_path = [Node(current, depth=0)]
+
+        for step_idx in range(max_steps):
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": [nodes_path[-1]],
+                "action": previous_action if previous_action else "START",
+                "message": f"Minimax - Bước {step_idx}: h(n)={self.tile_manhattan_distance(current)}, đường đi={path if path else 'START'}",
+                "depth": len(path)
+            })
+            step += 1
+
+            if is_goal(current):
+                self.solution = nodes_path
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tìm thấy goal bằng Minimax! Số bước: {len(path)}",
+                    "depth": len(path),
+                    "solution": self.solution
+                })
+                return
+
+            actions = self.ordered_actions_local(current, previous_action)
+            best_action = None
+            best_value = -float("inf")
+            frontier_candidates = []
+
+            for action in actions:
+                next_state = execute_action(current, action)
+                key = state_to_string(next_state)
+                search_visited = visited.copy()
+                search_visited.add(key)
+                
+                value = self.minimax_search(next_state, depth - 1, False, search_visited, action)
+                neighbor_node = Node(next_state, parent=nodes_path[-1], action=action, depth=len(path) + 1)
+                frontier_candidates.append((neighbor_node, value))
+
+                if value > best_value:
+                    best_value = value
+                    best_action = action
+
+            if best_action is None:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": "Không có nước đi khả thi (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": frontier_candidates,
+                "action": "EVALUATE",
+                "message": f"Thử các nước đi. Chọn {best_action} (value={best_value})",
+                "depth": len(path)
+            })
+            step += 1
+
+            next_state = execute_action(current, best_action)
+            key = state_to_string(next_state)
+            if key in visited:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": f"Trùng trạng thái đã đi qua khi chọn {best_action} (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            current = next_state
+            visited.add(key)
+            path.append(best_action)
+            nodes_path.append(Node(current, parent=nodes_path[-1], action=best_action, depth=len(path)))
+            previous_action = best_action
+
+        self.steps.append({
+            "step": step,
+            "node": nodes_path[-1],
+            "state": current,
+            "frontier": [],
+            "action": "FAILED",
+            "message": "Đạt giới hạn bước đi tối đa mà không tìm thấy goal",
+            "depth": len(path)
+        })
+
+    def generate_steps_alphabeta(self, start):
+        self.steps = []
+        self.solution = []
+        step = 1
+        current = copy.deepcopy(start)
+        path = []
+        previous_action = None
+        visited = {state_to_string(current)}
+        depth = 8
+        max_steps = 30
+
+        nodes_path = [Node(current, depth=0)]
+
+        for step_idx in range(max_steps):
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": [nodes_path[-1]],
+                "action": previous_action if previous_action else "START",
+                "message": f"Alpha-Beta - Bước {step_idx}: h(n)={self.tile_manhattan_distance(current)}, đường đi={path if path else 'START'}",
+                "depth": len(path)
+            })
+            step += 1
+
+            if is_goal(current):
+                self.solution = nodes_path
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tìm thấy goal bằng Alpha-Beta! Số bước: {len(path)}",
+                    "depth": len(path),
+                    "solution": self.solution
+                })
+                return
+
+            actions = self.ordered_actions_local(current, previous_action)
+            best_action = None
+            best_value = -float("inf")
+            alpha = -float("inf")
+            beta = float("inf")
+            frontier_candidates = []
+
+            for action in actions:
+                next_state = execute_action(current, action)
+                key = state_to_string(next_state)
+                search_visited = visited.copy()
+                search_visited.add(key)
+                
+                value = self.alphabeta_search(next_state, depth - 1, alpha, beta, search_visited, action)
+                neighbor_node = Node(next_state, parent=nodes_path[-1], action=action, depth=len(path) + 1)
+                frontier_candidates.append((neighbor_node, value))
+
+                if value > best_value:
+                    best_value = value
+                    best_action = action
+                alpha = max(alpha, best_value)
+
+            if best_action is None:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": "Không có nước đi khả thi (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": frontier_candidates,
+                "action": "EVALUATE",
+                "message": f"Thử các nước đi. Chọn {best_action} (value={best_value})",
+                "depth": len(path)
+            })
+            step += 1
+
+            next_state = execute_action(current, best_action)
+            key = state_to_string(next_state)
+            if key in visited:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": f"Trùng trạng thái đã đi qua khi chọn {best_action} (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            current = next_state
+            visited.add(key)
+            path.append(best_action)
+            nodes_path.append(Node(current, parent=nodes_path[-1], action=best_action, depth=len(path)))
+            previous_action = best_action
+
+        self.steps.append({
+            "step": step,
+            "node": nodes_path[-1],
+            "state": current,
+            "frontier": [],
+            "action": "FAILED",
+            "message": "Đạt giới hạn bước đi tối đa mà không tìm thấy goal",
+            "depth": len(path)
+        })
+
+    def generate_steps_expectimax(self, start):
+        self.steps = []
+        self.solution = []
+        step = 1
+        current = copy.deepcopy(start)
+        path = []
+        previous_action = None
+        visited = {state_to_string(current)}
+        depth = 6
+        max_steps = 30
+
+        nodes_path = [Node(current, depth=0)]
+
+        for step_idx in range(max_steps):
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": [nodes_path[-1]],
+                "action": previous_action if previous_action else "START",
+                "message": f"Expectimax - Bước {step_idx}: h(n)={self.tile_manhattan_distance(current)}, đường đi={path if path else 'START'}",
+                "depth": len(path)
+            })
+            step += 1
+
+            if is_goal(current):
+                self.solution = nodes_path
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "GOAL",
+                    "message": f"Tìm thấy goal bằng Expectimax! Số bước: {len(path)}",
+                    "depth": len(path),
+                    "solution": self.solution
+                })
+                return
+
+            actions = self.ordered_actions_local(current, previous_action)
+            best_action = None
+            best_value = -float("inf")
+            frontier_candidates = []
+
+            for action in actions:
+                next_state = execute_action(current, action)
+                key = state_to_string(next_state)
+                search_visited = visited.copy()
+                search_visited.add(key)
+                
+                value = self.expectimax_search(next_state, depth - 1, False, search_visited, action)
+                neighbor_node = Node(next_state, parent=nodes_path[-1], action=action, depth=len(path) + 1)
+                frontier_candidates.append((neighbor_node, value))
+
+                if value > best_value:
+                    best_value = value
+                    best_action = action
+
+            if best_action is None:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": "Không có nước đi khả thi (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            self.steps.append({
+                "step": step,
+                "node": nodes_path[-1],
+                "state": current,
+                "frontier": frontier_candidates,
+                "action": "EVALUATE",
+                "message": f"Thử các nước đi. Chọn {best_action} (value={best_value:.2f})",
+                "depth": len(path)
+            })
+            step += 1
+
+            next_state = execute_action(current, best_action)
+            key = state_to_string(next_state)
+            if key in visited:
+                self.steps.append({
+                    "step": step,
+                    "node": nodes_path[-1],
+                    "state": current,
+                    "frontier": [],
+                    "action": "FAILED",
+                    "message": f"Trùng trạng thái đã đi qua khi chọn {best_action} (Thất bại)",
+                    "depth": len(path)
+                })
+                return
+
+            current = next_state
+            visited.add(key)
+            path.append(best_action)
+            nodes_path.append(Node(current, parent=nodes_path[-1], action=best_action, depth=len(path)))
+            previous_action = best_action
+
+        self.steps.append({
+            "step": step,
+            "node": nodes_path[-1],
+            "state": current,
+            "frontier": [],
+            "action": "FAILED",
+            "message": "Đạt giới hạn bước đi tối đa mà không tìm thấy goal",
+            "depth": len(path)
+        })
+
 class PuzzleApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -2342,6 +2817,8 @@ class PuzzleApp(ctk.CTk):
             "--- Belief / Nondeterministic ---",
             "Belief State Greedy", "Belief State (BS-BG DFS)",
             "Nondeterministic Heuristic", "AND-OR Graph Search",
+            "--- Adversarial Search ---",
+            "Minimax", "Alpha-Beta Pruning", "Expectimax",
             "--- CSP / Constraint Search ---",
             "Backtracking Search", "Forward Checking",
             "Arc Consistency", "Min-Conflicts"
@@ -2513,6 +2990,12 @@ class PuzzleApp(ctk.CTk):
             self.solver.generate_steps_nondeterministic_heuristic()
         elif self.algorithm == "AND-OR Graph Search":
             self.solver.generate_steps_and_or_graph_search()
+        elif self.algorithm == "Minimax":
+            self.solver.generate_steps_minimax(self.initial_state)
+        elif self.algorithm == "Alpha-Beta Pruning":
+            self.solver.generate_steps_alphabeta(self.initial_state)
+        elif self.algorithm == "Expectimax":
+            self.solver.generate_steps_expectimax(self.initial_state)
         elif self.algorithm == "Backtracking Search":
             self.solver.generate_steps_backtracking_csp()
         elif self.algorithm == "Forward Checking":
